@@ -6,8 +6,8 @@ exports.handler = async () => {
 
     // přihlášení do Blobs – hodnoty bere z Netlify env
     const store = getStore("seed", {
-      siteID: 17481814-8832-47ab-a781-217500258999,
-      token: nfp_nBJ8ZPSpn9ven36KFxcshzxdaNS5yfncd4l2,
+      siteID: process.env.BLOBS_SITE_ID,
+      token: process.env.BLOBS_TOKEN,
     });
 
     const users =
