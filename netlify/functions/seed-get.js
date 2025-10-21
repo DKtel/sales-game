@@ -1,5 +1,6 @@
 "use strict";
 
 exports.handler = async () => {
-  return { statusCode: 200, body: "seed-get alive" };
+  const { getStore } = await import("@netlify/blobs"); // jen otestujeme import
+  return { statusCode: 200, body: "import ok" };
 };
