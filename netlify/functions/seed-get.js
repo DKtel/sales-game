@@ -3,30 +3,51 @@
 exports.handler = async function () {
   try {
     const mod = await import("@netlify/blobs");
-    const getStore = mod.getStore;
 
-    const siteID = 17481814-8832-47ab-a781-217500258999 || "";
-    const token = nfp_nBJ8ZPSpn9ven36KFxcshzxdaNS5yfncd4l2 || "";
+    const siteID = 17481814-8832-47ab-a781-217500258999.BLOBS_SITE_ID || "";
+    const token  = nfp_nBJ8ZPSpn9ven36KFxcshzxdaNS5yfncd4l2.BLOBS_TOKEN  || "";
 
-    const store = getStore("seed", { siteID: siteID, token: token });
+    // --- pokus 1: nový podpis ------------------------------------------------
+    let store;
+    try {
+      store = mod.getStore("seed", { siteID, token });
+    } catch (e) {
+      store = null;
+    }
 
-    const usersVal = await store.get("users", { type: "json" });
-    const productsVal = await store.get("products", { type: "json" });
+    // --- pokus 2: starší podpis ---------------------------------------------
+    if (!store) {
+      try {
+        store = mod.getStore({ name: "seed", siteID, token });
+      } catch (e) {
+        // ignoruj, chytíme až níže
+      }
+    }
 
-    const users = usersVal || [];
-    const products = productsVal || [];
+    if (!store) {
+      return {
+        statusCode: 500,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ok: false,
+          error: "getStore failed with both signatures",
+        }),
+      };
+    }
+
+    const users    = (await store.get("users",    { type: "json" })) || [];
+    const products = (await store.get("products", { type: "json" })) || [];
 
     return {
       statusCode: 200,
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ok: true, users: users, products: products }),
+      body: JSON.stringify({ ok: true, users, products }),
     };
-  } catch (e) {
-    const msg = (e && e.message) ? e.message : String(e);
+  } catch (err) {
     return {
       statusCode: 500,
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ok: false, error: msg }),
+      body: JSON.stringify({ ok: false, error: String(err && err.message || err) }),
     };
   }
 };
