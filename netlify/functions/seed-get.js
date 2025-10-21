@@ -1,8 +1,7 @@
-// Public: returns users + products from Netlify Blobs
-const { getStore } = require("@netlify/blobs");
-
+// Public: returns users + products from Netlify Blobs (ESM via dynamic import)
 exports.handler = async () => {
   try {
+    const { getStore } = await import("@netlify/blobs"); // ⬅️ místo require()
     const store = getStore("seed");
     const users = (await store.get("users", { type: "json" })) || [];
     const products = (await store.get("products", { type: "json" })) || [];

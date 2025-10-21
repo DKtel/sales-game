@@ -1,16 +1,16 @@
-// Protected: saves users + products to Netlify Blobs (requires ADMIN_TOKEN)
-const { getStore } = require("@netlify/blobs");
-
+// Protected: saves users + products (requires ADMIN_TOKEN). Uses dynamic import for ESM.
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Use POST" };
   }
+
   const token = event.headers["x-admin-token"];
   if (!token || token !== process.env.ADMIN_TOKEN) {
     return { statusCode: 401, body: "Unauthorized" };
   }
 
   try {
+    const { getStore } = await import("@netlify/blobs"); // ⬅️ místo require()
     const { users = [], products = [] } = JSON.parse(event.body || "{}");
     const store = getStore("seed");
     await store.set("users", users, { metadata: { updatedAt: Date.now() } });
