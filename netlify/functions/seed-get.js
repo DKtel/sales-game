@@ -5,8 +5,8 @@ exports.handler = async function () {
     const mod = await import("@netlify/blobs");
     const getStore = mod.getStore;
 
-    const siteID = process.env.BLOBS_SITE_ID || "";
-    const token = process.env.BLOBS_TOKEN || "";
+    const siteID = 17481814-8832-47ab-a781-217500258999 || "";
+    const token = nfp_nBJ8ZPSpn9ven36KFxcshzxdaNS5yfncd4l2 || "";
 
     const store = getStore("seed", { siteID: siteID, token: token });
 
