@@ -4,8 +4,8 @@ exports.handler = async function () {
   try {
     const mod = await import("@netlify/blobs");
 
-    const siteID = 17481814-8832-47ab-a781-217500258999.BLOBS_SITE_ID || "";
-    const token  = nfp_nBJ8ZPSpn9ven36KFxcshzxdaNS5yfncd4l2.BLOBS_TOKEN  || "";
+    const siteID = 17481814-8832-47ab-a781-217500258999 || "";
+    const token  = nfp_nBJ8ZPSpn9ven36KFxcshzxdaNS5yfncd4l2  || "";
 
     // --- pokus 1: nový podpis ------------------------------------------------
     let store;
