@@ -1,76 +1,32 @@
 "use strict";
 
-exports.handler = async () => {
+exports.handler = async function () {
   try {
-    const { getStore } = await import("@netlify/blobs");
+    const mod = await import("@netlify/blobs");
+    const getStore = mod.getStore;
 
-    // přihlášení do Blobs – hodnoty bere z Netlify env
-    const store = getStore("seed", {
-      siteID: 17481814-8832-47ab-a781-217500258999,
-      token: nfp_nBJ8ZPSpn9ven36KFxcshzxdaNS5yfncd4l2,
-    });
+    const siteID = process.env.BLOBS_SITE_ID || "";
+    const token = process.env.BLOBS_TOKEN || "";
 
-    const users =
-      (await store.get("users", { type: "json" })) || [];
-    const products =
-      (await store.get("products", { type: "json" })) || [];
+    const store = getStore("seed", { siteID: siteID, token: token });
 
-    return {"use strict";
+    const usersVal = await store.get("users", { type: "json" });
+    const productsVal = await store.get("products", { type: "json" });
 
-exports.handler = async () => {
-  // === lehká diagnostika prostředí ===
-  const diag = {
-    node: process.version,
-    has_SITE_ID: !!process.env.BLOBS_SITE_ID,
-    siteID_len: (process.env.BLOBS_SITE_ID || "").length,
-    has_TOKEN: !!process.env.BLOBS_TOKEN,
-    token_len: (process.env.BLOBS_TOKEN || "").length,
-  };
-
-  try {
-    const { getStore } = await import("@netlify/blobs");
-
-    // zkuste vytvořit store (když tady spadne, uvidíme chybu níže)
-    const store = getStore("seed", {
-      siteID: process.env.BLOBS_SITE_ID,
-      token: process.env.BLOBS_TOKEN,
-    });
-
-    // Zkusíme obě čtení paralelně (když key neexistuje, vrací null)
-    const [users, products] = await Promise.all([
-      store.get("users", { type: "json" }),
-      store.get("products", { type: "json" }),
-    ]);
+    const users = usersVal || [];
+    const products = productsVal || [];
 
     return {
       statusCode: 200,
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        ok: true,
-        diag,
-        users: users || [],
-        products: products || [],
-      }),
+      body: JSON.stringify({ ok: true, users: users, products: products }),
     };
-  } catch (err) {
+  } catch (e) {
+    const msg = (e && e.message) ? e.message : String(e);
     return {
       statusCode: 500,
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        ok: false,
-        diag,
-        error: err?.message || String(err),
-        stack: err?.stack || null,
-      }),
+      body: JSON.stringify({ ok: false, error: msg }),
     };
-  }
-};
-
-      statusCode: 200,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ users, products }),
-    };
-  } catch (err) {
-    return { statusCode: 500, body: "Error: " + (err?.message || String(err)) };
   }
 };
