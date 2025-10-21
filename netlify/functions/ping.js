@@ -1,0 +1,4 @@
+"use strict";
+exports.handler = async function () {
+  return { statusCode: 200, body: "ok" };
+};

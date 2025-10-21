@@ -19,7 +19,6 @@ exports.handler = async function (event) {
     });
 
     const { users = [], products = [] } = JSON.parse(event.body || "{}");
-
     await store.set("users", users, { metadata: { updatedAt: Date.now() } });
     await store.set("products", products, { metadata: { updatedAt: Date.now() } });
 
@@ -29,9 +28,6 @@ exports.handler = async function (event) {
       body: JSON.stringify({ ok: true }),
     };
   } catch (err) {
-    return {
-      statusCode: 500,
-      body: "Error: " + (err?.message || String(err)),
-    };
+    return { statusCode: 500, body: "Error: " + (err?.message || String(err)) };
   }
 };

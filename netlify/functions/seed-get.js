@@ -4,16 +4,13 @@ exports.handler = async function () {
   try {
     const { getStore } = await import("@netlify/blobs");
 
-    // explicit auth for Blobs
     const store = getStore("seed", {
       siteID: 17481814-8832-47ab-a781-217500258999,
       token: nfp_nBJ8ZPSpn9ven36KFxcshzxdaNS5yfncd4l2,
     });
 
-    const users =
-      (await store.get("users", { type: "json" })) || [];
-    const products =
-      (await store.get("products", { type: "json" })) || [];
+    const users = (await store.get("users", { type: "json" })) || [];
+    const products = (await store.get("products", { type: "json" })) || [];
 
     return {
       statusCode: 200,
@@ -21,9 +18,6 @@ exports.handler = async function () {
       body: JSON.stringify({ users, products }),
     };
   } catch (err) {
-    return {
-      statusCode: 500,
-      body: "Error: " + (err?.message || String(err)),
-    };
+    return { statusCode: 500, body: "Error: " + (err?.message || String(err)) };
   }
 };
