@@ -1,10 +1,10 @@
-// CommonJS verze + ESM import uvnitř handleru
-exports.handler = async (event) => {
+"use strict";
+
+exports.handler = async function (event) {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Use POST" };
   }
 
-  // stejné jméno hlavičky, jaké volá tvoje appka
   const admin = event.headers["x-admin-token"];
   if (!admin || admin !== process.env.ADMIN_TOKEN) {
     return { statusCode: 401, body: "Unauthorized" };
@@ -15,7 +15,7 @@ exports.handler = async (event) => {
 
     const store = getStore("seed", {
       siteID: 17481814-8832-47ab-a781-217500258999,
-      token:  nfp_nBJ8ZPSpn9ven36KFxcshzxdaNS5yfncd4l2,
+      token: nfp_nBJ8ZPSpn9ven36KFxcshzxdaNS5yfncd4l2,
     });
 
     const { users = [], products = [] } = JSON.parse(event.body || "{}");
@@ -28,7 +28,10 @@ exports.handler = async (event) => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ ok: true }),
     };
-  } catch (e) {
-    return { statusCode: 500, body: `Error: ${e.message}` };
+  } catch (err) {
+    return {
+      statusCode: 500,
+      body: "Error: " + (err?.message || String(err)),
+    };
   }
 };
