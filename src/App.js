@@ -36,28 +36,53 @@ const DEFAULT_PRODUCTS = [
 ];
 
 // ===== Komponenta: Přihlášení =====
-function Login({ onLogin }) {
+// dříve: function Login({ onLogin }) {
+function Login({ onLogin, usersFromApp = [] }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const users = JSON.parse(localStorage.getItem(LS_KEYS.USERS) || "[]");
-
-    const u = users.find(
+  const findMatch = (list) =>
+    list.find(
       (x) =>
-        x.email.trim().toLowerCase() === email.trim().toLowerCase() &&
-        String(x.password).trim() === String(password).trim()
+        x.email?.trim().toLowerCase() === email.trim().toLowerCase() &&
+        String(x.password ?? "").trim() === String(password).trim()
     );
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    // 1) preferuj uživatele, které už má appka ve state
+    let users =
+      usersFromApp.length
+        ? usersFromApp
+        : JSON.parse(localStorage.getItem(LS_KEYS.USERS) || "[]");
+
+    let u = findMatch(users);
+
+    // 2) když nenašlo, stáhni čerstvý seznam ze serveru a zkus znovu
+    if (!u) {
+      try {
+        const r = await fetch("/.netlify/functions/seed-get");
+        const data = await r.json();
+        if (data?.users?.length) {
+          localStorage.setItem(LS_KEYS.USERS, JSON.stringify(data.users));
+          u = findMatch(data.users);
+        }
+      } catch {}
+    }
 
     if (!u) {
       setError("Nesprávný e-mail nebo heslo.");
       return;
     }
+
     localStorage.setItem(LS_KEYS.SESSION, JSON.stringify({ userId: u.id }));
     onLogin(u);
   };
+
+  // ...zbytek Login UI beze změny
+}
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
