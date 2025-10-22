@@ -1,12 +1,12 @@
 "use strict";
 
 exports.handler = async (event) => {
-  // povol jen POST
+  // pouze POST
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Use POST" };
   }
 
-  // jednoduché “admin heslo” přes hlavičku
+  // jednoduché „admin“ ověření
   const admin = event.headers["x-admin-token"];
   if (!admin || admin !== process.env.ADMIN_TOKEN) {
     return { statusCode: 401, body: "Unauthorized" };
@@ -15,7 +15,7 @@ exports.handler = async (event) => {
   try {
     const { getStore } = await import("@netlify/blobs");
 
-    // ⬇️ explicitní konfigurace přes env proměnné z Netlify
+    // ⚠️ použij env proměnné – nic nedávej natvrdo
     const store = getStore({
       name: "seed",
       siteID: process.env.BLOBS_SITE_ID,
@@ -24,22 +24,25 @@ exports.handler = async (event) => {
 
     const { users = [], products = [] } = JSON.parse(event.body || "{}");
 
-    await store.set("users", users, { type: "json" });
-    await store.set("products", products, { type: "json" });
+    // ✅ Ukládej jako JSON (ne prostý .set s objektem)
+    await store.setJSON("users", users, { metadata: { updatedAt: Date.now() } });
+    await store.setJSON("products", products, {
+      metadata: { updatedAt: Date.now() },
+    });
 
     return {
       statusCode: 200,
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         ok: true,
-        users: users.length,
-        products: products.length,
+        saved: { users: users.length, products: products.length },
       }),
     };
   } catch (err) {
     return {
       statusCode: 500,
-      body: String(err?.message || err),
+      headers: { "content-type": "text/plain" },
+      body: `Error: ${err?.message || String(err)}`,
     };
   }
 };
