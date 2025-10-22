@@ -594,9 +594,9 @@ export default function SalesGameApp() {
     setTab("leaderboard");
   };
 
-  if (!me) {
-    return <Login onLogin={(u) => setSession({ userId: u.id })} />;
-  }
+ if (!me) {
+  return <Login usersFromApp={users} onLogin={(u) => setSession({ userId: u.id })} />;
+}
 
   return (
     <div className="min-h-screen bg-gray-100">
