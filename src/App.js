@@ -1,11 +1,14 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useMemo, useState } from "react";
 
-/* ================================================
-   Jednoduchý prototyp bez serveru (localStorage)
-   + volitelně napojené Netlify Functions (seed-get/seed-put)
-   ================================================ */
+// ======= Jednoduchý PROTOTYP bez serveru =======
+// - Přihlášení přes lokální úložiště + možnost načíst uživatele/produkty ze serveru (Netlify Functions + Blobs)
+// - Zápis prodejů (lokálně), přepočet bodů
+// - Žebříček (leaderboard)
+// - Admin: správa uživatelů/produktů + Import/Export + publikace na server
+// ================================================
 
-// Lokální klíče
+// --- Lokální klíče ---
 const LS_KEYS = {
   USERS: "sales_game_users_v1",
   ENTRIES: "sales_game_entries_v1",
@@ -13,11 +16,11 @@ const LS_KEYS = {
   SESSION: "sales_game_session_v1",
 };
 
-// Util
+// --- Pomocné funkce ---
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
-// Demo data
+// --- Výchozí data (pro první spuštění offline) ---
 const DEFAULT_USERS = [
   { id: "u-admin", name: "Admin", email: "admin@firma.cz", role: "admin", password: "admin" },
   { id: "u-oz1", name: "Jan Novák", email: "jan.novak@firma.cz", role: "user", password: "jan" },
@@ -31,8 +34,8 @@ const DEFAULT_PRODUCTS = [
   { id: "p-internet", name: "Internet", basePoints: 8 },
 ];
 
-/* ============ Login ============ */
-function Login({ onLogin, usersFromApp = [] }) {
+// =============== LOGIN =================
+function Login({ onLogin, usersFromApp = [], onHydrate }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -47,22 +50,34 @@ function Login({ onLogin, usersFromApp = [] }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // 1) preferuj uživatele, které má appka ve state
-    let users =
-      usersFromApp.length
-        ? usersFromApp
-        : JSON.parse(localStorage.getItem(LS_KEYS.USERS) || "[]");
+    // 1) zkusit aktuální users ze state (rychlé)
+    let users = usersFromApp.length
+      ? usersFromApp
+      : JSON.parse(localStorage.getItem(LS_KEYS.USERS) || "[]");
 
     let u = findMatch(users);
 
-    // 2) fallback – stáhni ze serveru
+    // 2) když nenašlo, stáhnout ze serveru a zkusit znovu
     if (!u) {
       try {
         const r = await fetch("/.netlify/functions/seed-get");
-        const data = await r.json();
-        if (data?.users?.length) {
-          localStorage.setItem(LS_KEYS.USERS, JSON.stringify(data.users));
-          u = findMatch(data.users);
+        if (r.ok) {
+          const data = await r.json().catch(() => ({}));
+          const srvUsers = Array.isArray(data.users) ? data.users : [];
+          const srvProducts = Array.isArray(data.products) ? data.products : [];
+
+          if (srvUsers.length) {
+            localStorage.setItem(LS_KEYS.USERS, JSON.stringify(srvUsers));
+          }
+          if (srvProducts.length) {
+            localStorage.setItem(LS_KEYS.PRODUCTS, JSON.stringify(srvProducts));
+          }
+
+          // Hydratace do App state → okamžitý re-render bez refresh
+          onHydrate?.({ users: srvUsers, products: srvProducts });
+
+          // Zkus přihlášení znovu proti čerstvým datům
+          u = findMatch(srvUsers.length ? srvUsers : users);
         }
       } catch {
         // ignore
@@ -74,8 +89,9 @@ function Login({ onLogin, usersFromApp = [] }) {
       return;
     }
 
+    // Ulož session + oznam App
     localStorage.setItem(LS_KEYS.SESSION, JSON.stringify({ userId: u.id }));
-    onLogin(u); // App okamžitě přepne do přihlášeného stavu (bez refresh)
+    onLogin(u);
   };
 
   return (
@@ -103,7 +119,7 @@ function Login({ onLogin, usersFromApp = [] }) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              onKeyDown={(e)=> { if(e.key==='Enter'){ /* form submit */ } }}
+              onKeyDown={(e) => e.key === "Enter" && handleSubmit(e)}
             />
           </div>
           {error && <p className="text-red-600 text-sm">{error}</p>}
@@ -122,24 +138,19 @@ function Login({ onLogin, usersFromApp = [] }) {
   );
 }
 
-/* ============ Zadat prodej ============ */
-function SalesEntry({ products, onAddSale }) {
+// =============== SALES ENTRY =================
+function SalesEntry({ user, products, onAddSale }) {
   const [productId, setProductId] = useState(products[0]?.id || "");
   const [quantity, setQuantity] = useState(1);
   const [note, setNote] = useState("");
   const [date, setDate] = useState(todayISO());
 
-  // Když se změní seznam produktů (admin přidá nový), udrž default volbu
+  // když se produkty načtou později, nastav první jako výchozí
   useEffect(() => {
-    if (!products.find(p => p.id === productId)) {
-      setProductId(products[0]?.id || "");
-    }
-  }, [products, productId]);
+    if (!productId && products[0]?.id) setProductId(products[0].id);
+  }, [products]);
 
-  const selected = useMemo(
-    () => products.find((p) => p.id === productId),
-    [products, productId]
-  );
+  const selected = useMemo(() => products.find((p) => p.id === productId), [products, productId]);
   const computedPoints = useMemo(
     () => (selected ? selected.basePoints * (Number(quantity) || 0) : 0),
     [selected, quantity]
@@ -148,25 +159,10 @@ function SalesEntry({ products, onAddSale }) {
   const submit = (e) => {
     e.preventDefault();
     if (!selected) return;
-    onAddSale({
-      productId,
-      quantity: Number(quantity),
-      date,
-      note,
-      points: computedPoints,
-    });
+    onAddSale({ productId, quantity: Number(quantity), date, note, points: computedPoints });
     setQuantity(1);
     setNote("");
   };
-
-  if (!products.length) {
-    return (
-      <div className="bg-white rounded-2xl p-5 shadow">
-        <h2 className="text-xl font-semibold mb-2">Zadat prodej</h2>
-        <p className="text-gray-500">Zatím nejsou definované žádné produkty.</p>
-      </div>
-    );
-  }
 
   return (
     <div className="bg-white rounded-2xl p-5 shadow">
@@ -229,14 +225,14 @@ function SalesEntry({ products, onAddSale }) {
   );
 }
 
-/* ============ Moje prodeje ============ */
+// =============== MY SALES =================
 function MySales({ user, entries, products }) {
-  const my = useMemo(
-    () => entries.filter((e) => e.userId === user.id).sort((a, b) => b.createdAt - a.createdAt),
-    [entries, user.id]
-  );
+  const my = (entries || [])
+    .filter((e) => e.userId === user.id)
+    .sort((a, b) => (b?.createdAt || 0) - (a?.createdAt || 0));
+
   const productMap = useMemo(
-    () => Object.fromEntries(products.map((p) => [p.id, p])),
+    () => Object.fromEntries((products || []).map((p) => [p.id, p])),
     [products]
   );
 
@@ -278,7 +274,7 @@ function MySales({ user, entries, products }) {
   );
 }
 
-/* ============ Import/Export helpers ============ */
+// ===== Import/Export utility =====
 function parseCSV(text) {
   const lines = text.trim().split(/\r?\n/);
   const headers = lines.shift().split(",").map((h) => h.trim());
@@ -315,22 +311,23 @@ function downloadCSV(filename, data, headers) {
   URL.revokeObjectURL(url);
 }
 
-/* ============ Admin panel ============ */
+// =============== ADMIN =================
 function AdminPanel({ users, setUsers, products, setProducts }) {
   const [uName, setUName] = useState("");
   const [uEmail, setUEmail] = useState("");
   const [uPass, setUPass] = useState("");
+
   const [pName, setPName] = useState("");
   const [pPoints, setPPoints] = useState(10);
+
   const [busy, setBusy] = useState(false);
 
-  // Import uživatelů
   const importUsersFromFile = async (file) => {
     const text = await file.text();
     const arr = file.name.endsWith(".json") ? JSON.parse(text) : parseCSV(text);
     const cleaned = arr
       .map((r) => ({
-        id: (r.id || "").trim() || uid(),
+        id: r.id?.trim() || uid(),
         name: (r.name || "").trim(),
         email: (r.email || "").trim().toLowerCase(),
         role: (r.role || "user").trim(),
@@ -347,13 +344,12 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
     });
   };
 
-  // Import produktů
   const importProductsFromFile = async (file) => {
     const text = await file.text();
     const arr = file.name.endsWith(".json") ? JSON.parse(text) : parseCSV(text);
     const cleaned = arr
       .map((r) => ({
-        id: (r.id || "").trim() || uid(),
+        id: r.id?.trim() || uid(),
         name: (r.name || "").trim(),
         basePoints: Number(r.basePoints || r.points || 0) || 0,
       }))
@@ -368,15 +364,11 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
     });
   };
 
-  // Exporty
   const exportUsers = () => downloadJSON("users.json", users);
-  const exportUsersCSV = () =>
-    downloadCSV("users.csv", users, ["id", "name", "email", "role", "password"]);
+  const exportUsersCSV = () => downloadCSV("users.csv", users, ["id", "name", "email", "role", "password"]);
   const exportProducts = () => downloadJSON("products.json", products);
-  const exportProductsCSV = () =>
-    downloadCSV("products.csv", products, ["id", "name", "basePoints"]);
+  const exportProductsCSV = () => downloadCSV("products.csv", products, ["id", "name", "basePoints"]);
 
-  // Přidání / mazání
   const addUser = (e) => {
     e.preventDefault();
     const newUser = {
@@ -417,6 +409,7 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
       return next;
     });
   };
+
   const removeProduct = (id) => {
     setProducts((prev) => {
       const next = prev.filter((p) => p.id !== id);
@@ -425,7 +418,6 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
     });
   };
 
-  // Načíst ze serveru
   const fetchFromServer = async () => {
     setBusy(true);
     try {
@@ -434,14 +426,20 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
       const data = await res.json().catch(() => ({}));
       const srvUsers = Array.isArray(data.users) ? data.users : [];
       const srvProducts = Array.isArray(data.products) ? data.products : [];
-      if (srvUsers.length || srvProducts.length) {
+
+      if (srvUsers.length) {
         localStorage.setItem(LS_KEYS.USERS, JSON.stringify(srvUsers));
-        localStorage.setItem(LS_KEYS.PRODUCTS, JSON.stringify(srvProducts));
         setUsers(srvUsers);
+      }
+      if (srvProducts.length) {
+        localStorage.setItem(LS_KEYS.PRODUCTS, JSON.stringify(srvProducts));
         setProducts(srvProducts);
       }
+
       alert(
-        `Načteno ze serveru ✅\nUživatelé: ${srvUsers.length}\nProdukty: ${srvProducts.length}`
+        `Načteno ze serveru ✅\nUživatelé: ${srvUsers.length || 0}\nProdukty: ${
+          srvProducts.length || 0
+        }`
       );
     } catch (err) {
       alert(`Chyba při načítání ze serveru ❌\n${String(err.message || err)}`);
@@ -450,11 +448,9 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
     }
   };
 
-  // Publikovat na server
   const publishToServer = async () => {
     const token = prompt("Zadej ADMIN_TOKEN (z Netlify env):");
     if (!token) return;
-
     setBusy(true);
     try {
       const res = await fetch("/.netlify/functions/seed-put", {
@@ -466,7 +462,7 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
         const txt = await res.text().catch(() => "");
         throw new Error(`HTTP ${res.status}\n${txt}`);
       }
-      // po úspěchu si hned stáhneme čerstvá data
+      // po publikaci si hned stáhni čerstvá data
       await fetchFromServer();
     } catch (err) {
       alert(`Chyba při publikování ❌\n${String(err.message || err)}`);
@@ -511,15 +507,21 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
               onChange={(e) => e.target.files[0] && importUsersFromFile(e.target.files[0])}
             />
           </label>
-          <button onClick={exportUsers} className="text-sm underline">Export JSON</button>
-          <button onClick={exportUsersCSV} className="text-sm underline">Export CSV</button>
+          <button onClick={exportUsers} className="text-sm underline">
+            Export JSON
+          </button>
+          <button onClick={exportUsersCSV} className="text-sm underline">
+            Export CSV
+          </button>
         </div>
         <ul className="divide-y">
           {users.map((u) => (
             <li key={u.id} className="py-2 flex items-center justify-between">
               <div>
                 <p className="font-medium">{u.name}</p>
-                <p className="text-xs text-gray-500">{u.email} • role: {u.role}</p>
+                <p className="text-xs text-gray-500">
+                  {u.email} • role: {u.role}
+                </p>
               </div>
               {u.role !== "admin" && (
                 <button onClick={() => removeUser(u.id)} className="text-red-600 text-sm hover:underline">
@@ -557,13 +559,15 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
             <input
               type="file"
               accept=".csv,.json"
-              onChange={(e) =>
-                e.target.files[0] && importProductsFromFile(e.target.files[0])
-              }
+              onChange={(e) => e.target.files[0] && importProductsFromFile(e.target.files[0])}
             />
           </label>
-          <button onClick={exportProducts} className="text-sm underline">Export JSON</button>
-          <button onClick={exportProductsCSV} className="text-sm underline">Export CSV</button>
+          <button onClick={exportProducts} className="text-sm underline">
+            Export JSON
+          </button>
+          <button onClick={exportProductsCSV} className="text-sm underline">
+            Export CSV
+          </button>
         </div>
         <ul className="divide-y">
           {products.map((p) => (
@@ -600,23 +604,22 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
   );
 }
 
-/* ============ Hlavní aplikace ============ */
+// =============== APP (ROOT) =================
 export default function SalesGameApp() {
-  const [session, setSession] = useState(null); // { userId }
+  const [session, setSession] = useState(null);
   const [me, setMe] = useState(null);
   const [users, setUsers] = useState([]);
   const [products, setProducts] = useState([]);
   const [entries, setEntries] = useState([]);
   const [tab, setTab] = useState("leaderboard");
 
-  // Odhlášení
   const handleLogout = () => {
     localStorage.removeItem(LS_KEYS.SESSION);
     setSession(null);
     setMe(null);
   };
 
-  // Init dat při prvním spuštění
+  // 1) Inicializace z localStorage
   useEffect(() => {
     const uRaw = localStorage.getItem(LS_KEYS.USERS);
     const pRaw = localStorage.getItem(LS_KEYS.PRODUCTS);
@@ -633,7 +636,30 @@ export default function SalesGameApp() {
     if (sRaw) setSession(JSON.parse(sRaw));
   }, []);
 
-  // Po změně session nastavíme me
+  // 2) AUTO-hydratace ze serveru po mountu (aby nové produkty viděli i jiní uživatelé)
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch("/.netlify/functions/seed-get");
+        if (!r.ok) return;
+        const data = await r.json().catch(() => ({}));
+        const srvUsers = Array.isArray(data.users) ? data.users : [];
+        const srvProducts = Array.isArray(data.products) ? data.products : [];
+        if (srvUsers.length) {
+          localStorage.setItem(LS_KEYS.USERS, JSON.stringify(srvUsers));
+          setUsers(srvUsers);
+        }
+        if (srvProducts.length) {
+          localStorage.setItem(LS_KEYS.PRODUCTS, JSON.stringify(srvProducts));
+          setProducts(srvProducts);
+        }
+      } catch {
+        // ignore offline
+      }
+    })();
+  }, []);
+
+  // 3) Reakce na změnu session → nastav "me"
   useEffect(() => {
     if (!session) {
       setMe(null);
@@ -643,7 +669,6 @@ export default function SalesGameApp() {
     setMe(u);
   }, [session, users]);
 
-  // Přidání prodeje
   const addSale = ({ productId, quantity, date, note, points }) => {
     if (!me) return;
     const newEntry = {
@@ -665,8 +690,16 @@ export default function SalesGameApp() {
   };
 
   if (!me) {
-    // Předáme uživatele ze state, login si ještě případně stáhne čerstvé ze serveru
-    return <Login usersFromApp={users} onLogin={(u) => setSession({ userId: u.id })} />;
+    return (
+      <Login
+        usersFromApp={users}
+        onHydrate={({ users: u = [], products: p = [] } = {}) => {
+          if (u.length) setUsers(u);
+          if (p.length) setProducts(p);
+        }}
+        onLogin={(u) => setSession({ userId: u.id })}
+      />
+    );
   }
 
   return (
@@ -713,7 +746,7 @@ export default function SalesGameApp() {
         </div>
 
         <div className="space-y-6 pb-12">
-          {tab === "entry" && <SalesEntry products={products} onAddSale={addSale} />}
+          {tab === "entry" && <SalesEntry user={me} products={products} onAddSale={addSale} />}
 
           {tab === "mysales" && <MySales user={me} entries={entries} products={products} />}
 
@@ -740,9 +773,9 @@ export default function SalesGameApp() {
   );
 }
 
-/* ============ Leaderboard ============ */
+// =============== LEADERBOARD =================
 function Leaderboard({ users, entries, currentUserId }) {
-  const totals = useMemo(() => {
+  const totals = React.useMemo(() => {
     const map = new Map();
     for (const e of entries) map.set(e.userId, (map.get(e.userId) || 0) + e.points);
     const arr = users.map((u) => ({ user: u, points: map.get(u.id) || 0 }));
@@ -784,4 +817,3 @@ function Leaderboard({ users, entries, currentUserId }) {
     </div>
   );
 }
-
