@@ -1,14 +1,7 @@
 /* eslint-disable */
 import React, { useEffect, useMemo, useState } from "react";
 
-// ======= Jednoduchý PROTOTYP bez serveru =======
-// - Přihlášení přes lokální úložiště + možnost načíst uživatele/produkty ze serveru (Netlify Functions + Blobs)
-// - Zápis prodejů (lokálně), přepočet bodů
-// - Žebříček (leaderboard)
-// - Admin: správa uživatelů/produktů + Import/Export + publikace na server
-// ================================================
-
-// --- Lokální klíče ---
+// =================== KONSTANTY & POMOCNÉ FUNKCE ===================
 const LS_KEYS = {
   USERS: "sales_game_users_v1",
   ENTRIES: "sales_game_entries_v1",
@@ -16,15 +9,32 @@ const LS_KEYS = {
   SESSION: "sales_game_session_v1",
 };
 
-// --- Pomocné funkce ---
-const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+const uid = () =>
+  Math.random().toString(36).slice(2) + Date.now().toString(36);
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
-// --- Výchozí data (pro první spuštění offline) ---
 const DEFAULT_USERS = [
-  { id: "u-admin", name: "Admin", email: "admin@firma.cz", role: "admin", password: "admin" },
-  { id: "u-oz1", name: "Jan Novák", email: "jan.novak@firma.cz", role: "user", password: "jan" },
-  { id: "u-oz2", name: "Petra Veselá", email: "petra.vesela@firma.cz", role: "user", password: "petra" },
+  {
+    id: "u-admin",
+    name: "Admin",
+    email: "admin@firma.cz",
+    role: "admin",
+    password: "admin",
+  },
+  {
+    id: "u-oz1",
+    name: "Jan Novák",
+    email: "jan.novak@firma.cz",
+    role: "user",
+    password: "jan",
+  },
+  {
+    id: "u-oz2",
+    name: "Petra Veselá",
+    email: "petra.vesela@firma.cz",
+    role: "user",
+    password: "petra",
+  },
 ];
 
 const DEFAULT_PRODUCTS = [
@@ -34,8 +44,47 @@ const DEFAULT_PRODUCTS = [
   { id: "p-internet", name: "Internet", basePoints: 8 },
 ];
 
-// =============== LOGIN =================
-function Login({ onLogin, usersFromApp = [], onHydrate }) {
+// ---- API helpers (serverové funkce) ----
+const api = {
+  getSeed: async () => {
+    try {
+      const r = await fetch("/.netlify/functions/seed-get");
+      if (!r.ok) return { users: [], products: [] };
+      const d = await r.json().catch(() => ({}));
+      return {
+        users: Array.isArray(d.users) ? d.users : [],
+        products: Array.isArray(d.products) ? d.products : [],
+      };
+    } catch {
+      return { users: [], products: [] };
+    }
+  },
+  listEntries: async () => {
+    try {
+      const r = await fetch("/.netlify/functions/entries-list");
+      if (!r.ok) return [];
+      const d = await r.json().catch(() => ({}));
+      return Array.isArray(d.entries) ? d.entries : [];
+    } catch {
+      return [];
+    }
+  },
+  addEntry: async (entry) => {
+    const r = await fetch("/.netlify/functions/entries-add", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ entry }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok) {
+      throw new Error(d.error || `HTTP ${r.status}`);
+    }
+    return d.entry;
+  },
+};
+
+// =================== LOGIN ===================
+function Login({ onLogin, usersFromApp = [] }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -50,38 +99,23 @@ function Login({ onLogin, usersFromApp = [], onHydrate }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // 1) zkusit aktuální users ze state (rychlé)
-    let users = usersFromApp.length
-      ? usersFromApp
-      : JSON.parse(localStorage.getItem(LS_KEYS.USERS) || "[]");
+    // 1) preferuj seznam z App state
+    let users =
+      usersFromApp.length
+        ? usersFromApp
+        : JSON.parse(localStorage.getItem(LS_KEYS.USERS) || "[]");
 
     let u = findMatch(users);
 
-    // 2) když nenašlo, stáhnout ze serveru a zkusit znovu
+    // 2) fallback: stáhni čerstvé uživatele ze serveru
     if (!u) {
       try {
-        const r = await fetch("/.netlify/functions/seed-get");
-        if (r.ok) {
-          const data = await r.json().catch(() => ({}));
-          const srvUsers = Array.isArray(data.users) ? data.users : [];
-          const srvProducts = Array.isArray(data.products) ? data.products : [];
-
-          if (srvUsers.length) {
-            localStorage.setItem(LS_KEYS.USERS, JSON.stringify(srvUsers));
-          }
-          if (srvProducts.length) {
-            localStorage.setItem(LS_KEYS.PRODUCTS, JSON.stringify(srvProducts));
-          }
-
-          // Hydratace do App state → okamžitý re-render bez refresh
-          onHydrate?.({ users: srvUsers, products: srvProducts });
-
-          // Zkus přihlášení znovu proti čerstvým datům
-          u = findMatch(srvUsers.length ? srvUsers : users);
+        const { users: srvUsers } = await api.getSeed();
+        if (srvUsers?.length) {
+          localStorage.setItem(LS_KEYS.USERS, JSON.stringify(srvUsers));
+          u = findMatch(srvUsers);
         }
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
 
     if (!u) {
@@ -89,9 +123,8 @@ function Login({ onLogin, usersFromApp = [], onHydrate }) {
       return;
     }
 
-    // Ulož session + oznam App
     localStorage.setItem(LS_KEYS.SESSION, JSON.stringify({ userId: u.id }));
-    onLogin(u);
+    onLogin(u); // rodič rovnou nastaví session i me → není potřeba refresh
   };
 
   return (
@@ -108,7 +141,6 @@ function Login({ onLogin, usersFromApp = [], onHydrate }) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              autoFocus
             />
           </div>
           <div>
@@ -119,7 +151,6 @@ function Login({ onLogin, usersFromApp = [], onHydrate }) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              onKeyDown={(e) => e.key === "Enter" && handleSubmit(e)}
             />
           </div>
           {error && <p className="text-red-600 text-sm">{error}</p>}
@@ -138,19 +169,22 @@ function Login({ onLogin, usersFromApp = [], onHydrate }) {
   );
 }
 
-// =============== SALES ENTRY =================
+// =================== ZADÁNÍ PRODEJE ===================
 function SalesEntry({ user, products, onAddSale }) {
   const [productId, setProductId] = useState(products[0]?.id || "");
   const [quantity, setQuantity] = useState(1);
   const [note, setNote] = useState("");
   const [date, setDate] = useState(todayISO());
 
-  // když se produkty načtou později, nastav první jako výchozí
+  // když se produkty načtou/změní, zvol první
   useEffect(() => {
     if (!productId && products[0]?.id) setProductId(products[0].id);
-  }, [products]);
+  }, [products]); // záměrně jen na změnu produktů
 
-  const selected = useMemo(() => products.find((p) => p.id === productId), [products, productId]);
+  const selected = useMemo(
+    () => products.find((p) => p.id === productId),
+    [products, productId]
+  );
   const computedPoints = useMemo(
     () => (selected ? selected.basePoints * (Number(quantity) || 0) : 0),
     [selected, quantity]
@@ -159,7 +193,13 @@ function SalesEntry({ user, products, onAddSale }) {
   const submit = (e) => {
     e.preventDefault();
     if (!selected) return;
-    onAddSale({ productId, quantity: Number(quantity), date, note, points: computedPoints });
+    onAddSale({
+      productId,
+      quantity: Number(quantity),
+      date,
+      note,
+      points: computedPoints,
+    });
     setQuantity(1);
     setNote("");
   };
@@ -177,7 +217,7 @@ function SalesEntry({ user, products, onAddSale }) {
           >
             {products.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.name} ({p.basePoints} b)
+                {p.name} ( {p.basePoints} b )
               </option>
             ))}
           </select>
@@ -225,16 +265,12 @@ function SalesEntry({ user, products, onAddSale }) {
   );
 }
 
-// =============== MY SALES =================
+// =================== MOJE PRODEJE ===================
 function MySales({ user, entries, products }) {
-  const my = (entries || [])
+  const my = entries
     .filter((e) => e.userId === user.id)
-    .sort((a, b) => (b?.createdAt || 0) - (a?.createdAt || 0));
-
-  const productMap = useMemo(
-    () => Object.fromEntries((products || []).map((p) => [p.id, p])),
-    [products]
-  );
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const productMap = Object.fromEntries(products.map((p) => [p.id, p]));
 
   return (
     <div className="bg-white rounded-2xl p-5 shadow">
@@ -274,7 +310,7 @@ function MySales({ user, entries, products }) {
   );
 }
 
-// ===== Import/Export utility =====
+// =================== IMPORT/EXPORT UTILITY ===================
 function parseCSV(text) {
   const lines = text.trim().split(/\r?\n/);
   const headers = lines.shift().split(",").map((h) => h.trim());
@@ -288,7 +324,9 @@ function parseCSV(text) {
   });
 }
 function downloadJSON(filename, data) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json",
+  });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -298,11 +336,15 @@ function downloadJSON(filename, data) {
 }
 function toCSV(arr, headers) {
   const head = headers.join(",");
-  const body = arr.map((o) => headers.map((h) => o[h] ?? "").join(",")).join("\n");
+  const body = arr
+    .map((o) => headers.map((h) => (o[h] ?? "")).join(","))
+    .join("\n");
   return head + "\n" + body;
 }
 function downloadCSV(filename, data, headers) {
-  const blob = new Blob([toCSV(data, headers)], { type: "text/csv;charset=utf-8;" });
+  const blob = new Blob([toCSV(data, headers)], {
+    type: "text/csv;charset=utf-8;",
+  });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -311,7 +353,7 @@ function downloadCSV(filename, data, headers) {
   URL.revokeObjectURL(url);
 }
 
-// =============== ADMIN =================
+// =================== ADMIN PANEL ===================
 function AdminPanel({ users, setUsers, products, setProducts }) {
   const [uName, setUName] = useState("");
   const [uEmail, setUEmail] = useState("");
@@ -320,7 +362,7 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
   const [pName, setPName] = useState("");
   const [pPoints, setPPoints] = useState(10);
 
-  const [busy, setBusy] = useState(false);
+  const [seedBusy, setSeedBusy] = useState(false);
 
   const importUsersFromFile = async (file) => {
     const text = await file.text();
@@ -365,9 +407,11 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
   };
 
   const exportUsers = () => downloadJSON("users.json", users);
-  const exportUsersCSV = () => downloadCSV("users.csv", users, ["id", "name", "email", "role", "password"]);
+  const exportUsersCSV = () =>
+    downloadCSV("users.csv", users, ["id", "name", "email", "role", "password"]);
   const exportProducts = () => downloadJSON("products.json", products);
-  const exportProductsCSV = () => downloadCSV("products.csv", products, ["id", "name", "basePoints"]);
+  const exportProductsCSV = () =>
+    downloadCSV("products.csv", products, ["id", "name", "basePoints"]);
 
   const addUser = (e) => {
     e.preventDefault();
@@ -391,7 +435,11 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
 
   const addProduct = (e) => {
     e.preventDefault();
-    const newProduct = { id: uid(), name: pName.trim(), basePoints: Number(pPoints) || 0 };
+    const newProduct = {
+      id: uid(),
+      name: pName.trim(),
+      basePoints: Number(pPoints) || 0,
+    };
     if (!newProduct.name) return;
     setProducts((prev) => {
       const next = [...prev, newProduct];
@@ -418,56 +466,55 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
     });
   };
 
+  // Načíst users/products ze serveru
   const fetchFromServer = async () => {
-    setBusy(true);
+    setSeedBusy(true);
     try {
-      const res = await fetch("/.netlify/functions/seed-get");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json().catch(() => ({}));
-      const srvUsers = Array.isArray(data.users) ? data.users : [];
-      const srvProducts = Array.isArray(data.products) ? data.products : [];
+      const { users: srvUsers, products: srvProducts } = await api.getSeed();
 
-      if (srvUsers.length) {
+      if (srvUsers.length || srvProducts.length) {
         localStorage.setItem(LS_KEYS.USERS, JSON.stringify(srvUsers));
-        setUsers(srvUsers);
-      }
-      if (srvProducts.length) {
         localStorage.setItem(LS_KEYS.PRODUCTS, JSON.stringify(srvProducts));
+        setUsers(srvUsers);
         setProducts(srvProducts);
       }
 
       alert(
-        `Načteno ze serveru ✅\nUživatelé: ${srvUsers.length || 0}\nProdukty: ${
-          srvProducts.length || 0
-        }`
+        `Načteno ze serveru ✅\nUživatelé: ${srvUsers.length}\nProdukty: ${srvProducts.length}`
       );
     } catch (err) {
       alert(`Chyba při načítání ze serveru ❌\n${String(err.message || err)}`);
     } finally {
-      setBusy(false);
+      setSeedBusy(false);
     }
   };
 
+  // Publikovat users/products na server (využívá seed-put)
   const publishToServer = async () => {
     const token = prompt("Zadej ADMIN_TOKEN (z Netlify env):");
     if (!token) return;
-    setBusy(true);
+
+    setSeedBusy(true);
     try {
       const res = await fetch("/.netlify/functions/seed-put", {
         method: "POST",
-        headers: { "content-type": "application/json", "x-admin-token": token },
+        headers: {
+          "content-type": "application/json",
+          "x-admin-token": token,
+        },
         body: JSON.stringify({ users, products }),
       });
+
       if (!res.ok) {
         const txt = await res.text().catch(() => "");
         throw new Error(`HTTP ${res.status}\n${txt}`);
       }
-      // po publikaci si hned stáhni čerstvá data
+
       await fetchFromServer();
     } catch (err) {
       alert(`Chyba při publikování ❌\n${String(err.message || err)}`);
     } finally {
-      setBusy(false);
+      setSeedBusy(false);
     }
   };
 
@@ -504,7 +551,9 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
             <input
               type="file"
               accept=".csv,.json"
-              onChange={(e) => e.target.files[0] && importUsersFromFile(e.target.files[0])}
+              onChange={(e) =>
+                e.target.files[0] && importUsersFromFile(e.target.files[0])
+              }
             />
           </label>
           <button onClick={exportUsers} className="text-sm underline">
@@ -524,7 +573,10 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
                 </p>
               </div>
               {u.role !== "admin" && (
-                <button onClick={() => removeUser(u.id)} className="text-red-600 text-sm hover:underline">
+                <button
+                  onClick={() => removeUser(u.id)}
+                  className="text-red-600 text-sm hover:underline"
+                >
                   Smazat
                 </button>
               )}
@@ -559,7 +611,9 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
             <input
               type="file"
               accept=".csv,.json"
-              onChange={(e) => e.target.files[0] && importProductsFromFile(e.target.files[0])}
+              onChange={(e) =>
+                e.target.files[0] && importProductsFromFile(e.target.files[0])
+              }
             />
           </label>
           <button onClick={exportProducts} className="text-sm underline">
@@ -576,7 +630,10 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
                 <p className="font-medium">{p.name}</p>
                 <p className="text-xs text-gray-500">{p.basePoints} bodů / ks</p>
               </div>
-              <button onClick={() => removeProduct(p.id)} className="text-red-600 text-sm hover:underline">
+              <button
+                onClick={() => removeProduct(p.id)}
+                className="text-red-600 text-sm hover:underline"
+              >
                 Smazat
               </button>
             </li>
@@ -587,24 +644,24 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
       <div className="md:col-span-2 flex flex-wrap gap-3 justify-end">
         <button
           onClick={fetchFromServer}
-          disabled={busy}
+          disabled={seedBusy}
           className="text-sm border rounded-xl px-4 py-2 disabled:opacity-60"
         >
-          {busy ? "Načítám…" : "Načíst ze serveru"}
+          {seedBusy ? "Načítám…" : "Načíst ze serveru"}
         </button>
         <button
           onClick={publishToServer}
-          disabled={busy}
+          disabled={seedBusy}
           className="text-sm bg-black text-white rounded-xl px-4 py-2 disabled:opacity-60"
         >
-          {busy ? "Publikuji…" : "Publikovat uživatele & produkty na server"}
+          {seedBusy ? "Publikuji…" : "Publikovat uživatele & produkty na server"}
         </button>
       </div>
     </div>
   );
 }
 
-// =============== APP (ROOT) =================
+// =================== HLAVNÍ APP ===================
 export default function SalesGameApp() {
   const [session, setSession] = useState(null);
   const [me, setMe] = useState(null);
@@ -619,13 +676,14 @@ export default function SalesGameApp() {
     setMe(null);
   };
 
-  // 1) Inicializace z localStorage
+  // Lokální bootstrap (když je to úplně prázdné)
   useEffect(() => {
     const uRaw = localStorage.getItem(LS_KEYS.USERS);
     const pRaw = localStorage.getItem(LS_KEYS.PRODUCTS);
     const eRaw = localStorage.getItem(LS_KEYS.ENTRIES);
     if (!uRaw) localStorage.setItem(LS_KEYS.USERS, JSON.stringify(DEFAULT_USERS));
-    if (!pRaw) localStorage.setItem(LS_KEYS.PRODUCTS, JSON.stringify(DEFAULT_PRODUCTS));
+    if (!pRaw)
+      localStorage.setItem(LS_KEYS.PRODUCTS, JSON.stringify(DEFAULT_PRODUCTS));
     if (!eRaw) localStorage.setItem(LS_KEYS.ENTRIES, JSON.stringify([]));
 
     setUsers(JSON.parse(localStorage.getItem(LS_KEYS.USERS) || "[]"));
@@ -636,15 +694,11 @@ export default function SalesGameApp() {
     if (sRaw) setSession(JSON.parse(sRaw));
   }, []);
 
-  // 2) AUTO-hydratace ze serveru po mountu (aby nové produkty viděli i jiní uživatelé)
+  // AUTO-hydratace ze serveru po mountu (users + products + entries)
   useEffect(() => {
     (async () => {
       try {
-        const r = await fetch("/.netlify/functions/seed-get");
-        if (!r.ok) return;
-        const data = await r.json().catch(() => ({}));
-        const srvUsers = Array.isArray(data.users) ? data.users : [];
-        const srvProducts = Array.isArray(data.products) ? data.products : [];
+        const { users: srvUsers, products: srvProducts } = await api.getSeed();
         if (srvUsers.length) {
           localStorage.setItem(LS_KEYS.USERS, JSON.stringify(srvUsers));
           setUsers(srvUsers);
@@ -653,13 +707,19 @@ export default function SalesGameApp() {
           localStorage.setItem(LS_KEYS.PRODUCTS, JSON.stringify(srvProducts));
           setProducts(srvProducts);
         }
+
+        const srvEntries = await api.listEntries();
+        if (srvEntries.length) {
+          localStorage.setItem(LS_KEYS.ENTRIES, JSON.stringify(srvEntries));
+          setEntries(srvEntries);
+        }
       } catch {
         // ignore offline
       }
     })();
   }, []);
 
-  // 3) Reakce na změnu session → nastav "me"
+  // Při změně session nastavíme me
   useEffect(() => {
     if (!session) {
       setMe(null);
@@ -669,35 +729,54 @@ export default function SalesGameApp() {
     setMe(u);
   }, [session, users]);
 
-  const addSale = ({ productId, quantity, date, note, points }) => {
+  // Uložení prodeje -> nejdřív server (entries-add), pak state + localStorage
+  const addSale = async ({ productId, quantity, date, note, points }) => {
     if (!me) return;
-    const newEntry = {
-      id: uid(),
+
+    const payload = {
       userId: me.id,
       productId,
       quantity,
       date,
       note,
       points,
-      createdAt: Date.now(),
     };
-    setEntries((prev) => {
-      const next = [newEntry, ...prev];
-      localStorage.setItem(LS_KEYS.ENTRIES, JSON.stringify(next));
-      return next;
-    });
-    setTab("leaderboard");
+
+    try {
+      const saved = await api.addEntry(payload);
+      setEntries((prev) => {
+        const next = [saved, ...prev];
+        localStorage.setItem(LS_KEYS.ENTRIES, JSON.stringify(next));
+        return next;
+      });
+      setTab("leaderboard");
+    } catch (err) {
+      // Fallback lokálně, kdyby server spadl
+      const localFallback = {
+        id: Math.random().toString(36).slice(2) + Date.now().toString(36),
+        ...payload,
+        createdAt: Date.now(),
+      };
+      setEntries((prev) => {
+        const next = [localFallback, ...prev];
+        localStorage.setItem(LS_KEYS.ENTRIES, JSON.stringify(next));
+        return next;
+      });
+      setTab("leaderboard");
+      alert(
+        "Serverové uložení se nepovedlo, záznam je dočasně jen lokálně."
+      );
+    }
   };
 
   if (!me) {
     return (
       <Login
         usersFromApp={users}
-        onHydrate={({ users: u = [], products: p = [] } = {}) => {
-          if (u.length) setUsers(u);
-          if (p.length) setProducts(p);
+        onLogin={(u) => {
+          setSession({ userId: u.id });
+          setMe(u); // okamžitě nastavíme, aby nebyl nutný refresh
         }}
-        onLogin={(u) => setSession({ userId: u.id })}
       />
     );
   }
@@ -717,7 +796,10 @@ export default function SalesGameApp() {
             <span className="text-sm text-gray-600">
               {me?.name} ({me?.role})
             </span>
-            <button onClick={handleLogout} className="text-sm text-gray-500 hover:underline">
+            <button
+              onClick={handleLogout}
+              className="text-sm text-gray-500 hover:underline"
+            >
               Odhlásit
             </button>
           </div>
@@ -746,15 +828,19 @@ export default function SalesGameApp() {
         </div>
 
         <div className="space-y-6 pb-12">
-          {tab === "entry" && <SalesEntry user={me} products={products} onAddSale={addSale} />}
+          {tab === "entry" && (
+            <SalesEntry user={me} products={products} onAddSale={addSale} />
+          )}
 
-          {tab === "mysales" && <MySales user={me} entries={entries} products={products} />}
+          {tab === "mysales" && (
+            <MySales user={me} entries={entries} products={products} />
+          )}
 
           {tab === "leaderboard" && (
             <Leaderboard users={users} entries={entries} currentUserId={me.id} />
           )}
 
-          {tab === "admin" && me?.role === "admin" && (
+          {tab === "admin" && me.role === "admin" && (
             <AdminPanel
               users={users}
               setUsers={setUsers}
@@ -767,19 +853,21 @@ export default function SalesGameApp() {
 
       {/* Footer */}
       <footer className="text-center text-xs text-gray-400 py-6">
-        Prototyp bez serveru • pro produkci napojte Auth + DB
+        Prototyp • serverová data: Netlify Functions + Blobs
       </footer>
     </div>
   );
 }
 
-// =============== LEADERBOARD =================
+// =================== ŽEBŘÍČEK ===================
 function Leaderboard({ users, entries, currentUserId }) {
   const totals = React.useMemo(() => {
     const map = new Map();
     for (const e of entries) map.set(e.userId, (map.get(e.userId) || 0) + e.points);
     const arr = users.map((u) => ({ user: u, points: map.get(u.id) || 0 }));
-    arr.sort((a, b) => b.points - a.points || a.user.name.localeCompare(b.user.name));
+    arr.sort(
+      (a, b) => b.points - a.points || a.user.name.localeCompare(b.user.name)
+    );
     return arr;
   }, [users, entries]);
 
@@ -799,7 +887,10 @@ function Leaderboard({ users, entries, currentUserId }) {
             {totals.map((row, idx) => {
               const isMe = row.user.id === currentUserId;
               return (
-                <tr key={row.user.id} className={`border-t ${isMe ? "bg-green-50" : ""}`}>
+                <tr
+                  key={row.user.id}
+                  className={`border-t ${isMe ? "bg-green-50" : ""}`}
+                >
                   <td className="p-2 font-semibold">{idx + 1}</td>
                   <td className="p-2">
                     {row.user.name}
