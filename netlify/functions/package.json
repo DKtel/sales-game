@@ -1,9 +1,0 @@
-{
-  "name": "sales-game-functions",
-  "version": "1.0.0",
-  "private": true,
-  "type": "commonjs",
-  "dependencies": {
-    "@netlify/blobs": "^6.3.1"
-  }
-}
