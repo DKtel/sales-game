@@ -42,33 +42,37 @@ function Login({ onLogin, usersFromApp = [] }) {
   const [error, setError] = useState("");
 
   const findMatch = (list) =>
-    list.find(
+    (list || []).find(
       (x) =>
-        x.email?.trim().toLowerCase() === email.trim().toLowerCase() &&
-        String(x.password ?? "").trim() === String(password).trim()
+        x?.email?.trim().toLowerCase() === email.trim().toLowerCase() &&
+        String(x?.password ?? "").trim() === String(password).trim()
     );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
 
     // 1) preferuj uživatele, které už má appka ve state
-    let users =
-      usersFromApp.length
-        ? usersFromApp
-        : JSON.parse(localStorage.getItem(LS_KEYS.USERS) || "[]");
+    let users = usersFromApp.length
+      ? usersFromApp
+      : JSON.parse(localStorage.getItem(LS_KEYS.USERS) || "[]");
 
     let u = findMatch(users);
+    let syncedUsers = null;
 
     // 2) když nenašlo, stáhni čerstvý seznam ze serveru a zkus znovu
     if (!u) {
       try {
         const r = await fetch("/.netlify/functions/seed-get");
         const data = await r.json();
-        if (data?.users?.length) {
+        if (Array.isArray(data?.users) && data.users.length) {
+          syncedUsers = data.users;
           localStorage.setItem(LS_KEYS.USERS, JSON.stringify(data.users));
           u = findMatch(data.users);
         }
-      } catch {}
+      } catch {
+        /* ignore */
+      }
     }
 
     if (!u) {
@@ -76,10 +80,9 @@ function Login({ onLogin, usersFromApp = [] }) {
       return;
     }
 
-    localStorage.setItem(LS_KEYS.SESSION, JSON.stringify({ userId: u.id }));
-    onLogin(u);
+    // session a propsání users řeší nadřazená App (aby nebylo potřeba F5)
+    onLogin(u, syncedUsers);
   };
-
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
@@ -130,8 +133,22 @@ function SalesEntry({ user, products, onAddSale }) {
   const [note, setNote] = useState("");
   const [date, setDate] = useState(todayISO());
 
-  const selected = useMemo(() => products.find((p) => p.id === productId), [products, productId]);
-  const computedPoints = useMemo(() => (selected ? selected.basePoints * (Number(quantity) || 0) : 0), [selected, quantity]);
+  // když se změní seznam produktů a vybraný neexistuje, zvol první
+  useEffect(() => {
+    if (products.length && !products.find((p) => p.id === productId)) {
+      setProductId(products[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products]);
+
+  const selected = useMemo(
+    () => products.find((p) => p.id === productId),
+    [products, productId]
+  );
+  const computedPoints = useMemo(
+    () => (selected ? selected.basePoints * (Number(quantity) || 0) : 0),
+    [selected, quantity]
+  );
 
   const submit = (e) => {
     e.preventDefault();
@@ -417,7 +434,7 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
             value={uName}
             onChange={(e) => setUName(e.target.value)}
           />
-        <input
+          <input
             className="border rounded-xl px-3 py-2"
             placeholder="E-mail"
             value={uEmail}
@@ -547,7 +564,7 @@ export default function SalesGameApp() {
     setMe(null);
   };
 
-  // Init demo dat při prvním spuštění
+  // Init demo dat při prvním spuštění (lokální)
   useEffect(() => {
     const uRaw = localStorage.getItem(LS_KEYS.USERS);
     const pRaw = localStorage.getItem(LS_KEYS.PRODUCTS);
@@ -562,6 +579,28 @@ export default function SalesGameApp() {
 
     const sRaw = localStorage.getItem(LS_KEYS.SESSION);
     if (sRaw) setSession(JSON.parse(sRaw));
+  }, []);
+
+  // Po mountu zkus čerstvá data ze serveru a sjednoť stav
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch("/.netlify/functions/seed-get");
+        const data = await r.json();
+        if (!cancelled && Array.isArray(data?.users) && Array.isArray(data?.products)) {
+          localStorage.setItem(LS_KEYS.USERS, JSON.stringify(data.users));
+          localStorage.setItem(LS_KEYS.PRODUCTS, JSON.stringify(data.products));
+          setUsers(data.users);
+          setProducts(data.products);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Při změně session nastavíme me
@@ -594,9 +633,21 @@ export default function SalesGameApp() {
     setTab("leaderboard");
   };
 
- if (!me) {
-  return <Login usersFromApp={users} onLogin={(u) => setSession({ userId: u.id })} />;
-}
+  if (!me) {
+    return (
+      <Login
+        usersFromApp={users}
+        onLogin={(u, maybeUsers) => {
+          if (Array.isArray(maybeUsers)) {
+            localStorage.setItem(LS_KEYS.USERS, JSON.stringify(maybeUsers));
+            setUsers(maybeUsers);
+          }
+          localStorage.setItem(LS_KEYS.SESSION, JSON.stringify({ userId: u.id }));
+          setSession({ userId: u.id });
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -673,7 +724,7 @@ export default function SalesGameApp() {
 function Leaderboard({ users, entries, currentUserId }) {
   const totals = React.useMemo(() => {
     const map = new Map();
-    for (const e of entries) map.set(e.userId, (map.get(e.userId) || 0) + e.points);
+    for (const e of entries) map.set(e.userId, (map.get(e.userId) || 0) + (e?.points || 0));
     const arr = users.map((u) => ({ user: u, points: map.get(u.id) || 0 }));
     arr.sort((a, b) => b.points - a.points || a.user.name.localeCompare(b.user.name));
     return arr;
@@ -707,6 +758,58 @@ function Leaderboard({ users, entries, currentUserId }) {
                 </tr>
               );
             })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ===== Moje prodeje (robustní render) =====
+function MySales({ user, entries, products }) {
+  const safeEntries = Array.isArray(entries) ? entries : [];
+  const safeProducts = Array.isArray(products) ? products : [];
+
+  const my = safeEntries
+    .filter((e) => e && e.userId === user?.id)
+    .sort((a, b) => (Number(b?.createdAt) || 0) - (Number(a?.createdAt) || 0));
+
+  const productMap = useMemo(
+    () => Object.fromEntries(safeProducts.map((p) => [p.id, p])),
+    [safeProducts]
+  );
+
+  return (
+    <div className="bg-white rounded-2xl p-5 shadow">
+      <h2 className="text-xl font-semibold mb-4">Moje prodeje</h2>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="text-left text-gray-600">
+              <th className="p-2">Datum</th>
+              <th className="p-2">Produkt</th>
+              <th className="p-2">Ks</th>
+              <th className="p-2">Poznámka</th>
+              <th className="p-2">Body</th>
+            </tr>
+          </thead>
+          <tbody>
+            {my.map((e) => (
+              <tr key={e.id} className="border-t">
+                <td className="p-2">{e?.date || "-"}</td>
+                <td className="p-2">{productMap[e?.productId]?.name || e?.productId || "-"}</td>
+                <td className="p-2">{e?.quantity ?? "-"}</td>
+                <td className="p-2">{e?.note ?? ""}</td>
+                <td className="p-2 font-semibold">{e?.points ?? 0}</td>
+              </tr>
+            ))}
+            {my.length === 0 && (
+              <tr>
+                <td className="p-3 text-gray-500" colSpan={5}>
+                  Zatím žádné záznamy.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
