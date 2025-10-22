@@ -354,37 +354,27 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
   };
 
   // === Publikovat na server (Netlify Functions + Blobs) ===
-  const publishToServer = async () => {
-    try {
-      const token = prompt("Zadej ADMIN_TOKEN (Netlify > Site settings > Environment variables)");
-      if (!token) return;
+const publishToServer = async () => {
+  const token = prompt("Zadej ADMIN_TOKEN (z Netlify env):");
+  if (!token) return;
 
-      setSeedBusy(true);
+  const res = await fetch("/.netlify/functions/seed-put", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-admin-token": token
+    },
+    body: JSON.stringify({ users, products }),
+  });
 
-      const res = await fetch("/.netlify/functions/seed-put", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-admin-token": token, // musí přesně sedět s funkcí
-        },
-        body: JSON.stringify({ users, products }),
-      });
+  if (res.ok) {
+    alert("Publikováno na server ✅");
+  } else {
+    const txt = await res.text().catch(() => "");
+    alert(`Chyba při publikování ❌\nHTTP ${res.status}\n${txt}`);
+  }
+};
 
-      const text = await res.text();
-      let json;
-      try { json = JSON.parse(text); } catch { /* může vrátit čistý text */ }
-
-      if (res.ok && json?.ok) {
-        alert("Publikováno na server ✅");
-      } else {
-        alert(`Chyba při publikování ❌\nHTTP ${res.status}\n${text}`);
-      }
-    } catch (e) {
-      alert("Chyba: " + e.message);
-    } finally {
-      setSeedBusy(false);
-    }
-  };
 
   return (
     <div className="grid md:grid-cols-2 gap-6">
