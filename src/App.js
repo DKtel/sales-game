@@ -784,3 +784,4 @@ function Leaderboard({ users, entries, currentUserId }) {
     </div>
   );
 }
+
