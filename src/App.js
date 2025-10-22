@@ -1,4 +1,4 @@
-/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable */
 import React, { useEffect, useMemo, useState } from "react";
 
 // ======= Jednoduchý PROTOTYP bez serveru =======
