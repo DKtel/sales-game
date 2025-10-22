@@ -1,3 +1,4 @@
-exports.handler = async function () {
-  return { statusCode: 200, body: "seed-get alive" };
+exports.handler = async () => {
+  const mod = await import("@netlify/blobs");
+  return { statusCode: 200, body: mod ? "import ok" : "import failed" };
 };
