@@ -45,7 +45,6 @@ function Login({ onLogin }) {
     e.preventDefault();
     const users = JSON.parse(localStorage.getItem(LS_KEYS.USERS) || "[]");
 
-    // ✨ OPRAVENÁ PODMÍNKA (TRIM + správné uzavírání závorek)
     const u = users.find(
       (x) =>
         x.email.trim().toLowerCase() === email.trim().toLowerCase() &&
@@ -101,7 +100,6 @@ function Login({ onLogin }) {
     </div>
   );
 }
-
 
 // ===== Panel: Zadat prodej =====
 function SalesEntry({ user, products, onAddSale }) {
@@ -265,6 +263,9 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
   const [pName, setPName] = useState("");
   const [pPoints, setPPoints] = useState(10);
 
+  // Stav publikace na server
+  const [seedBusy, setSeedBusy] = useState(false);
+
   // === Hromadný import UŽIVATELŮ ===
   const importUsersFromFile = async (file) => {
     const text = await file.text();
@@ -354,15 +355,35 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
 
   // === Publikovat na server (Netlify Functions + Blobs) ===
   const publishToServer = async () => {
-    const token = prompt("Zadej ADMIN_TOKEN (z Netlify env):");
-    if (!token) return;
-    const res = await fetch("/.netlify/functions/seed-put", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-admin-token": token },
-      body: JSON.stringify({ users, products }),
-    });
-    if (res.ok) alert("Publikováno na server ✅");
-    else alert("Chyba při publikování ❌");
+    try {
+      const token = prompt("Zadej ADMIN_TOKEN (Netlify > Site settings > Environment variables)");
+      if (!token) return;
+
+      setSeedBusy(true);
+
+      const res = await fetch("/.netlify/functions/seed-put", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-token": token, // musí přesně sedět s funkcí
+        },
+        body: JSON.stringify({ users, products }),
+      });
+
+      const text = await res.text();
+      let json;
+      try { json = JSON.parse(text); } catch { /* může vrátit čistý text */ }
+
+      if (res.ok && json?.ok) {
+        alert("Publikováno na server ✅");
+      } else {
+        alert(`Chyba při publikování ❌\nHTTP ${res.status}\n${text}`);
+      }
+    } catch (e) {
+      alert("Chyba: " + e.message);
+    } finally {
+      setSeedBusy(false);
+    }
   };
 
   return (
@@ -421,8 +442,12 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
       </div>
 
       <div className="md:col-span-2 flex justify-end">
-        <button onClick={publishToServer} className="text-sm bg-black text-white rounded-xl px-4 py-2">
-          Publikovat uživatele & produkty na server
+        <button
+          onClick={publishToServer}
+          disabled={seedBusy}
+          className="text-sm bg-black text-white rounded-xl px-4 py-2 disabled:opacity-60"
+        >
+          {seedBusy ? "Publikuji…" : "Publikovat uživatele & produkty na server"}
         </button>
       </div>
     </div>
@@ -445,7 +470,6 @@ export default function SalesGameApp() {
     setMe(null);
   };
 
-
   // Init demo dat při prvním spuštění
   useEffect(() => {
     const uRaw = localStorage.getItem(LS_KEYS.USERS);
@@ -463,12 +487,12 @@ export default function SalesGameApp() {
     if (sRaw) setSession(JSON.parse(sRaw));
   }, []);
 
-// Při změně session nastavíme me
-useEffect(() => {
-  if (!session) { setMe(null); return; }
-  const u = users.find((x) => x.id === session.userId) || null;
-  setMe(u);
-}, [session, users]);
+  // Při změně session nastavíme me
+  useEffect(() => {
+    if (!session) { setMe(null); return; }
+    const u = users.find((x) => x.id === session.userId) || null;
+    setMe(u);
+  }, [session, users]);
 
   const addSale = ({ productId, quantity, date, note, points }) => {
     if (!me) return;
@@ -490,9 +514,9 @@ useEffect(() => {
     setTab("leaderboard");
   };
 
- if (!me) {
-   return <Login onLogin={(u) => setSession({ userId: u.id })} />;
- }
+  if (!me) {
+    return <Login onLogin={(u) => setSession({ userId: u.id })} />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -540,9 +564,9 @@ useEffect(() => {
             <MySales user={me} entries={entries} products={products} />
           )}
 
-         {tab === "leaderboard" && (
-  <Leaderboard users={users} entries={entries} currentUserId={me.id} />
-)}
+          {tab === "leaderboard" && (
+            <Leaderboard users={users} entries={entries} currentUserId={me.id} />
+          )}
 
           {tab === "admin" && me.role === "admin" && (
             <AdminPanel users={users} setUsers={setUsers} products={products} setProducts={setProducts} />
@@ -555,6 +579,7 @@ useEffect(() => {
     </div>
   );
 }
+
 // ===== Žebříček (Leaderboard) =====
 function Leaderboard({ users, entries, currentUserId }) {
   const totals = React.useMemo(() => {
@@ -589,8 +614,7 @@ function Leaderboard({ users, entries, currentUserId }) {
                   <td className="p-2">
                     {row.user.name}
                     {isMe && (
-                      <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 align-middle">
-                      </span>
+                      <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 align-middle" />
                     )}
                   </td>
                   <td className="p-2 font-bold">{row.points}</td>
