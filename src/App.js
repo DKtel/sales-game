@@ -1,15 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 
-// ======= Jednoduchý PROTOTYP bez serveru =======
-// - Přihlášení přes lokální úložiště (NE bezpečné, jen demo)
-// - Zápis prodejů, přepočet bodů podle produktů
-// - Žebříček (leaderboard)
-// - Admin: správa uživatelů a bodových pravidel + Import/Export CSV/JSON
-//
-// Pro produkci napojte Auth + DB.
-// ================================================
+/* ================================================
+   Jednoduchý prototyp bez serveru (localStorage)
+   + volitelně napojené Netlify Functions (seed-get/seed-put)
+   ================================================ */
 
-// --- Lokální klíče ---
+// Lokální klíče
 const LS_KEYS = {
   USERS: "sales_game_users_v1",
   ENTRIES: "sales_game_entries_v1",
@@ -17,11 +13,11 @@ const LS_KEYS = {
   SESSION: "sales_game_session_v1",
 };
 
-// --- Pomocné funkce ---
+// Util
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
-// --- Výchozí data (poprvé naplníme) ---
+// Demo data
 const DEFAULT_USERS = [
   { id: "u-admin", name: "Admin", email: "admin@firma.cz", role: "admin", password: "admin" },
   { id: "u-oz1", name: "Jan Novák", email: "jan.novak@firma.cz", role: "user", password: "jan" },
@@ -35,43 +31,41 @@ const DEFAULT_PRODUCTS = [
   { id: "p-internet", name: "Internet", basePoints: 8 },
 ];
 
-// ===== Komponenta: Přihlášení =====
+/* ============ Login ============ */
 function Login({ onLogin, usersFromApp = [] }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
   const findMatch = (list) =>
-    (list || []).find(
+    list.find(
       (x) =>
-        x?.email?.trim().toLowerCase() === email.trim().toLowerCase() &&
-        String(x?.password ?? "").trim() === String(password).trim()
+        x.email?.trim().toLowerCase() === email.trim().toLowerCase() &&
+        String(x.password ?? "").trim() === String(password).trim()
     );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
 
-    // 1) preferuj uživatele, které už má appka ve state
-    let users = usersFromApp.length
-      ? usersFromApp
-      : JSON.parse(localStorage.getItem(LS_KEYS.USERS) || "[]");
+    // 1) preferuj uživatele, které má appka ve state
+    let users =
+      usersFromApp.length
+        ? usersFromApp
+        : JSON.parse(localStorage.getItem(LS_KEYS.USERS) || "[]");
 
     let u = findMatch(users);
-    let syncedUsers = null;
 
-    // 2) když nenašlo, stáhni čerstvý seznam ze serveru a zkus znovu
+    // 2) fallback – stáhni ze serveru
     if (!u) {
       try {
         const r = await fetch("/.netlify/functions/seed-get");
         const data = await r.json();
-        if (Array.isArray(data?.users) && data.users.length) {
-          syncedUsers = data.users;
+        if (data?.users?.length) {
           localStorage.setItem(LS_KEYS.USERS, JSON.stringify(data.users));
           u = findMatch(data.users);
         }
       } catch {
-        /* ignore */
+        // ignore
       }
     }
 
@@ -80,8 +74,8 @@ function Login({ onLogin, usersFromApp = [] }) {
       return;
     }
 
-    // session a propsání users řeší nadřazená App (aby nebylo potřeba F5)
-    onLogin(u, syncedUsers);
+    localStorage.setItem(LS_KEYS.SESSION, JSON.stringify({ userId: u.id }));
+    onLogin(u); // App okamžitě přepne do přihlášeného stavu (bez refresh)
   };
 
   return (
@@ -98,6 +92,7 @@ function Login({ onLogin, usersFromApp = [] }) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              autoFocus
             />
           </div>
           <div>
@@ -108,6 +103,7 @@ function Login({ onLogin, usersFromApp = [] }) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              onKeyDown={(e)=> { if(e.key==='Enter'){ /* form submit */ } }}
             />
           </div>
           {error && <p className="text-red-600 text-sm">{error}</p>}
@@ -126,20 +122,19 @@ function Login({ onLogin, usersFromApp = [] }) {
   );
 }
 
-// ===== Panel: Zadat prodej =====
-function SalesEntry({ user, products, onAddSale }) {
+/* ============ Zadat prodej ============ */
+function SalesEntry({ products, onAddSale }) {
   const [productId, setProductId] = useState(products[0]?.id || "");
   const [quantity, setQuantity] = useState(1);
   const [note, setNote] = useState("");
   const [date, setDate] = useState(todayISO());
 
-  // když se změní seznam produktů a vybraný neexistuje, zvol první
+  // Když se změní seznam produktů (admin přidá nový), udrž default volbu
   useEffect(() => {
-    if (products.length && !products.find((p) => p.id === productId)) {
-      setProductId(products[0].id);
+    if (!products.find(p => p.id === productId)) {
+      setProductId(products[0]?.id || "");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [products]);
+  }, [products, productId]);
 
   const selected = useMemo(
     () => products.find((p) => p.id === productId),
@@ -153,10 +148,25 @@ function SalesEntry({ user, products, onAddSale }) {
   const submit = (e) => {
     e.preventDefault();
     if (!selected) return;
-    onAddSale({ productId, quantity: Number(quantity), date, note, points: computedPoints });
+    onAddSale({
+      productId,
+      quantity: Number(quantity),
+      date,
+      note,
+      points: computedPoints,
+    });
     setQuantity(1);
     setNote("");
   };
+
+  if (!products.length) {
+    return (
+      <div className="bg-white rounded-2xl p-5 shadow">
+        <h2 className="text-xl font-semibold mb-2">Zadat prodej</h2>
+        <p className="text-gray-500">Zatím nejsou definované žádné produkty.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-2xl p-5 shadow">
@@ -171,7 +181,7 @@ function SalesEntry({ user, products, onAddSale }) {
           >
             {products.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.name} ( {p.basePoints} b )
+                {p.name} ({p.basePoints} b)
               </option>
             ))}
           </select>
@@ -219,7 +229,56 @@ function SalesEntry({ user, products, onAddSale }) {
   );
 }
 
-// ===== Import/Export utility funkce =====
+/* ============ Moje prodeje ============ */
+function MySales({ user, entries, products }) {
+  const my = useMemo(
+    () => entries.filter((e) => e.userId === user.id).sort((a, b) => b.createdAt - a.createdAt),
+    [entries, user.id]
+  );
+  const productMap = useMemo(
+    () => Object.fromEntries(products.map((p) => [p.id, p])),
+    [products]
+  );
+
+  return (
+    <div className="bg-white rounded-2xl p-5 shadow">
+      <h2 className="text-xl font-semibold mb-4">Moje prodeje</h2>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="text-left text-gray-600">
+              <th className="p-2">Datum</th>
+              <th className="p-2">Produkt</th>
+              <th className="p-2">Ks</th>
+              <th className="p-2">Poznámka</th>
+              <th className="p-2">Body</th>
+            </tr>
+          </thead>
+          <tbody>
+            {my.map((e) => (
+              <tr key={e.id} className="border-t">
+                <td className="p-2">{e.date}</td>
+                <td className="p-2">{productMap[e.productId]?.name || e.productId}</td>
+                <td className="p-2">{e.quantity}</td>
+                <td className="p-2">{e.note}</td>
+                <td className="p-2 font-semibold">{e.points}</td>
+              </tr>
+            ))}
+            {my.length === 0 && (
+              <tr>
+                <td className="p-3 text-gray-500" colSpan={5}>
+                  Zatím žádné záznamy.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ============ Import/Export helpers ============ */
 function parseCSV(text) {
   const lines = text.trim().split(/\r?\n/);
   const headers = lines.shift().split(",").map((h) => h.trim());
@@ -256,27 +315,22 @@ function downloadCSV(filename, data, headers) {
   URL.revokeObjectURL(url);
 }
 
-// ===== Panel: Admin =====
+/* ============ Admin panel ============ */
 function AdminPanel({ users, setUsers, products, setProducts }) {
-  // Správa uživatelů
   const [uName, setUName] = useState("");
   const [uEmail, setUEmail] = useState("");
   const [uPass, setUPass] = useState("");
-
-  // Správa produktů
   const [pName, setPName] = useState("");
   const [pPoints, setPPoints] = useState(10);
+  const [busy, setBusy] = useState(false);
 
-  // Stav publikace/načítání
-  const [seedBusy, setSeedBusy] = useState(false);
-
-  // === Hromadný import UŽIVATELŮ ===
+  // Import uživatelů
   const importUsersFromFile = async (file) => {
     const text = await file.text();
     const arr = file.name.endsWith(".json") ? JSON.parse(text) : parseCSV(text);
     const cleaned = arr
       .map((r) => ({
-        id: r.id?.trim() || uid(),
+        id: (r.id || "").trim() || uid(),
         name: (r.name || "").trim(),
         email: (r.email || "").trim().toLowerCase(),
         role: (r.role || "user").trim(),
@@ -293,13 +347,13 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
     });
   };
 
-  // === Hromadný import PRODUKTŮ ===
+  // Import produktů
   const importProductsFromFile = async (file) => {
     const text = await file.text();
     const arr = file.name.endsWith(".json") ? JSON.parse(text) : parseCSV(text);
     const cleaned = arr
       .map((r) => ({
-        id: r.id?.trim() || uid(),
+        id: (r.id || "").trim() || uid(),
         name: (r.name || "").trim(),
         basePoints: Number(r.basePoints || r.points || 0) || 0,
       }))
@@ -314,16 +368,24 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
     });
   };
 
-  // === Exporty ===
+  // Exporty
   const exportUsers = () => downloadJSON("users.json", users);
-  const exportUsersCSV = () => downloadCSV("users.csv", users, ["id", "name", "email", "role", "password"]);
+  const exportUsersCSV = () =>
+    downloadCSV("users.csv", users, ["id", "name", "email", "role", "password"]);
   const exportProducts = () => downloadJSON("products.json", products);
-  const exportProductsCSV = () => downloadCSV("products.csv", products, ["id", "name", "basePoints"]);
+  const exportProductsCSV = () =>
+    downloadCSV("products.csv", products, ["id", "name", "basePoints"]);
 
-  // === Přidání / mazání ===
+  // Přidání / mazání
   const addUser = (e) => {
     e.preventDefault();
-    const newUser = { id: uid(), name: uName.trim(), email: uEmail.trim().toLowerCase(), role: "user", password: uPass };
+    const newUser = {
+      id: uid(),
+      name: uName.trim(),
+      email: uEmail.trim().toLowerCase(),
+      role: "user",
+      password: uPass,
+    };
     if (!newUser.name || !newUser.email || !newUser.password) return;
     setUsers((prev) => {
       const next = [...prev, newUser];
@@ -355,7 +417,6 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
       return next;
     });
   };
-
   const removeProduct = (id) => {
     setProducts((prev) => {
       const next = prev.filter((p) => p.id !== id);
@@ -364,62 +425,53 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
     });
   };
 
-  // === Načíst data ze serveru (Netlify Functions + Blobs) ===
+  // Načíst ze serveru
   const fetchFromServer = async () => {
-    setSeedBusy(true);
+    setBusy(true);
     try {
       const res = await fetch("/.netlify/functions/seed-get");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json().catch(() => ({}));
-
       const srvUsers = Array.isArray(data.users) ? data.users : [];
       const srvProducts = Array.isArray(data.products) ? data.products : [];
-
       if (srvUsers.length || srvProducts.length) {
         localStorage.setItem(LS_KEYS.USERS, JSON.stringify(srvUsers));
         localStorage.setItem(LS_KEYS.PRODUCTS, JSON.stringify(srvProducts));
         setUsers(srvUsers);
         setProducts(srvProducts);
       }
-
-      const uCount = srvUsers.length || data.usersCount || 0;
-      const pCount = srvProducts.length || data.productsCount || 0;
-
-      alert(`Načteno ze serveru ✅\nUživatelé: ${uCount}\nProdukty: ${pCount}`);
+      alert(
+        `Načteno ze serveru ✅\nUživatelé: ${srvUsers.length}\nProdukty: ${srvProducts.length}`
+      );
     } catch (err) {
       alert(`Chyba při načítání ze serveru ❌\n${String(err.message || err)}`);
     } finally {
-      setSeedBusy(false);
+      setBusy(false);
     }
   };
 
-  // === Publikovat na server (Netlify Functions + Blobs) ===
+  // Publikovat na server
   const publishToServer = async () => {
     const token = prompt("Zadej ADMIN_TOKEN (z Netlify env):");
     if (!token) return;
 
-    setSeedBusy(true);
+    setBusy(true);
     try {
       const res = await fetch("/.netlify/functions/seed-put", {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-admin-token": token,
-        },
+        headers: { "content-type": "application/json", "x-admin-token": token },
         body: JSON.stringify({ users, products }),
       });
-
       if (!res.ok) {
         const txt = await res.text().catch(() => "");
         throw new Error(`HTTP ${res.status}\n${txt}`);
       }
-
-      // Po úspěšném publikování rovnou stáhneme čerstvá data ze serveru
+      // po úspěchu si hned stáhneme čerstvá data
       await fetchFromServer();
     } catch (err) {
       alert(`Chyba při publikování ❌\n${String(err.message || err)}`);
     } finally {
-      setSeedBusy(false);
+      setBusy(false);
     }
   };
 
@@ -453,23 +505,21 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
         <div className="flex flex-wrap gap-2 mb-3">
           <label className="text-sm">
             Import (CSV/JSON):{" "}
-            <input type="file" accept=".csv,.json" onChange={(e) => e.target.files[0] && importUsersFromFile(e.target.files[0])} />
+            <input
+              type="file"
+              accept=".csv,.json"
+              onChange={(e) => e.target.files[0] && importUsersFromFile(e.target.files[0])}
+            />
           </label>
-          <button onClick={exportUsers} className="text-sm underline">
-            Export JSON
-          </button>
-          <button onClick={exportUsersCSV} className="text-sm underline">
-            Export CSV
-          </button>
+          <button onClick={exportUsers} className="text-sm underline">Export JSON</button>
+          <button onClick={exportUsersCSV} className="text-sm underline">Export CSV</button>
         </div>
         <ul className="divide-y">
           {users.map((u) => (
             <li key={u.id} className="py-2 flex items-center justify-between">
               <div>
                 <p className="font-medium">{u.name}</p>
-                <p className="text-xs text-gray-500">
-                  {u.email} • role: {u.role}
-                </p>
+                <p className="text-xs text-gray-500">{u.email} • role: {u.role}</p>
               </div>
               {u.role !== "admin" && (
                 <button onClick={() => removeUser(u.id)} className="text-red-600 text-sm hover:underline">
@@ -504,14 +554,16 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
         <div className="flex flex-wrap gap-2 mb-3">
           <label className="text-sm">
             Import (CSV/JSON):{" "}
-            <input type="file" accept=".csv,.json" onChange={(e) => e.target.files[0] && importProductsFromFile(e.target.files[0])} />
+            <input
+              type="file"
+              accept=".csv,.json"
+              onChange={(e) =>
+                e.target.files[0] && importProductsFromFile(e.target.files[0])
+              }
+            />
           </label>
-          <button onClick={exportProducts} className="text-sm underline">
-            Export JSON
-          </button>
-          <button onClick={exportProductsCSV} className="text-sm underline">
-            Export CSV
-          </button>
+          <button onClick={exportProducts} className="text-sm underline">Export JSON</button>
+          <button onClick={exportProductsCSV} className="text-sm underline">Export CSV</button>
         </div>
         <ul className="divide-y">
           {products.map((p) => (
@@ -531,40 +583,40 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
       <div className="md:col-span-2 flex flex-wrap gap-3 justify-end">
         <button
           onClick={fetchFromServer}
-          disabled={seedBusy}
+          disabled={busy}
           className="text-sm border rounded-xl px-4 py-2 disabled:opacity-60"
         >
-          {seedBusy ? "Načítám…" : "Načíst ze serveru"}
+          {busy ? "Načítám…" : "Načíst ze serveru"}
         </button>
         <button
           onClick={publishToServer}
-          disabled={seedBusy}
+          disabled={busy}
           className="text-sm bg-black text-white rounded-xl px-4 py-2 disabled:opacity-60"
         >
-          {seedBusy ? "Publikuji…" : "Publikovat uživatele & produkty na server"}
+          {busy ? "Publikuji…" : "Publikovat uživatele & produkty na server"}
         </button>
       </div>
     </div>
   );
 }
 
-// ===== Hlavní aplikace =====
+/* ============ Hlavní aplikace ============ */
 export default function SalesGameApp() {
-  const [session, setSession] = useState(null);
+  const [session, setSession] = useState(null); // { userId }
   const [me, setMe] = useState(null);
   const [users, setUsers] = useState([]);
   const [products, setProducts] = useState([]);
   const [entries, setEntries] = useState([]);
   const [tab, setTab] = useState("leaderboard");
 
-  // --- Odhlášení uživatele ---
+  // Odhlášení
   const handleLogout = () => {
     localStorage.removeItem(LS_KEYS.SESSION);
     setSession(null);
     setMe(null);
   };
 
-  // Init demo dat při prvním spuštění (lokální)
+  // Init dat při prvním spuštění
   useEffect(() => {
     const uRaw = localStorage.getItem(LS_KEYS.USERS);
     const pRaw = localStorage.getItem(LS_KEYS.PRODUCTS);
@@ -581,29 +633,7 @@ export default function SalesGameApp() {
     if (sRaw) setSession(JSON.parse(sRaw));
   }, []);
 
-  // Po mountu zkus čerstvá data ze serveru a sjednoť stav
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const r = await fetch("/.netlify/functions/seed-get");
-        const data = await r.json();
-        if (!cancelled && Array.isArray(data?.users) && Array.isArray(data?.products)) {
-          localStorage.setItem(LS_KEYS.USERS, JSON.stringify(data.users));
-          localStorage.setItem(LS_KEYS.PRODUCTS, JSON.stringify(data.products));
-          setUsers(data.users);
-          setProducts(data.products);
-        }
-      } catch {
-        /* ignore */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Při změně session nastavíme me
+  // Po změně session nastavíme me
   useEffect(() => {
     if (!session) {
       setMe(null);
@@ -613,6 +643,7 @@ export default function SalesGameApp() {
     setMe(u);
   }, [session, users]);
 
+  // Přidání prodeje
   const addSale = ({ productId, quantity, date, note, points }) => {
     if (!me) return;
     const newEntry = {
@@ -634,19 +665,8 @@ export default function SalesGameApp() {
   };
 
   if (!me) {
-    return (
-      <Login
-        usersFromApp={users}
-        onLogin={(u, maybeUsers) => {
-          if (Array.isArray(maybeUsers)) {
-            localStorage.setItem(LS_KEYS.USERS, JSON.stringify(maybeUsers));
-            setUsers(maybeUsers);
-          }
-          localStorage.setItem(LS_KEYS.SESSION, JSON.stringify({ userId: u.id }));
-          setSession({ userId: u.id });
-        }}
-      />
-    );
+    // Předáme uživatele ze state, login si ještě případně stáhne čerstvé ze serveru
+    return <Login usersFromApp={users} onLogin={(u) => setSession({ userId: u.id })} />;
   }
 
   return (
@@ -662,7 +682,7 @@ export default function SalesGameApp() {
           </div>
           <div className="flex items-center gap-3">
             <span className="text-sm text-gray-600">
-              {me.name} ({me.role})
+              {me?.name} ({me?.role})
             </span>
             <button onClick={handleLogout} className="text-sm text-gray-500 hover:underline">
               Odhlásit
@@ -678,7 +698,7 @@ export default function SalesGameApp() {
             { id: "entry", label: "Zadat prodej" },
             { id: "mysales", label: "Moje prodeje" },
             { id: "leaderboard", label: "Žebříček" },
-            ...(me.role === "admin" ? [{ id: "admin", label: "Admin" }] : []),
+            ...(me?.role === "admin" ? [{ id: "admin", label: "Admin" }] : []),
           ].map((t) => (
             <button
               key={t.id}
@@ -693,7 +713,7 @@ export default function SalesGameApp() {
         </div>
 
         <div className="space-y-6 pb-12">
-          {tab === "entry" && <SalesEntry user={me} products={products} onAddSale={addSale} />}
+          {tab === "entry" && <SalesEntry products={products} onAddSale={addSale} />}
 
           {tab === "mysales" && <MySales user={me} entries={entries} products={products} />}
 
@@ -701,7 +721,7 @@ export default function SalesGameApp() {
             <Leaderboard users={users} entries={entries} currentUserId={me.id} />
           )}
 
-          {tab === "admin" && me.role === "admin" && (
+          {tab === "admin" && me?.role === "admin" && (
             <AdminPanel
               users={users}
               setUsers={setUsers}
@@ -720,11 +740,11 @@ export default function SalesGameApp() {
   );
 }
 
-// ===== Žebříček (Leaderboard) =====
+/* ============ Leaderboard ============ */
 function Leaderboard({ users, entries, currentUserId }) {
-  const totals = React.useMemo(() => {
+  const totals = useMemo(() => {
     const map = new Map();
-    for (const e of entries) map.set(e.userId, (map.get(e.userId) || 0) + (e?.points || 0));
+    for (const e of entries) map.set(e.userId, (map.get(e.userId) || 0) + e.points);
     const arr = users.map((u) => ({ user: u, points: map.get(u.id) || 0 }));
     arr.sort((a, b) => b.points - a.points || a.user.name.localeCompare(b.user.name));
     return arr;
@@ -758,58 +778,6 @@ function Leaderboard({ users, entries, currentUserId }) {
                 </tr>
               );
             })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-// ===== Moje prodeje (robustní render) =====
-function MySales({ user, entries, products }) {
-  const safeEntries = Array.isArray(entries) ? entries : [];
-  const safeProducts = Array.isArray(products) ? products : [];
-
-  const my = safeEntries
-    .filter((e) => e && e.userId === user?.id)
-    .sort((a, b) => (Number(b?.createdAt) || 0) - (Number(a?.createdAt) || 0));
-
-  const productMap = useMemo(
-    () => Object.fromEntries(safeProducts.map((p) => [p.id, p])),
-    [safeProducts]
-  );
-
-  return (
-    <div className="bg-white rounded-2xl p-5 shadow">
-      <h2 className="text-xl font-semibold mb-4">Moje prodeje</h2>
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="text-left text-gray-600">
-              <th className="p-2">Datum</th>
-              <th className="p-2">Produkt</th>
-              <th className="p-2">Ks</th>
-              <th className="p-2">Poznámka</th>
-              <th className="p-2">Body</th>
-            </tr>
-          </thead>
-          <tbody>
-            {my.map((e) => (
-              <tr key={e.id} className="border-t">
-                <td className="p-2">{e?.date || "-"}</td>
-                <td className="p-2">{productMap[e?.productId]?.name || e?.productId || "-"}</td>
-                <td className="p-2">{e?.quantity ?? "-"}</td>
-                <td className="p-2">{e?.note ?? ""}</td>
-                <td className="p-2 font-semibold">{e?.points ?? 0}</td>
-              </tr>
-            ))}
-            {my.length === 0 && (
-              <tr>
-                <td className="p-3 text-gray-500" colSpan={5}>
-                  Zatím žádné záznamy.
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
       </div>
