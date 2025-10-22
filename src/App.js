@@ -362,7 +362,7 @@ const publishToServer = async () => {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-admin-token": token
+      "x-admin-token": MyUltraSecret123
     },
     body: JSON.stringify({ users, products }),
   });
