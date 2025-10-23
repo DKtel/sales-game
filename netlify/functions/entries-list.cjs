@@ -8,7 +8,7 @@ exports.handler = async (event) => {
   try {
     const { getStore } = await import("@netlify/blobs");
 
-    // DŮLEŽITÉ: předáme siteID + token
+    // >>> DŮLEŽITÉ: předat siteID + token <<<
     const store = getStore("entries", {
       siteID: process.env.BLOBS_SITE_ID,
       token: process.env.BLOBS_TOKEN,
