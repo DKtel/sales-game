@@ -5,12 +5,26 @@ exports.handler = async (event) => {
     return { statusCode: 405, body: "Use POST" };
   }
 
+  // --- tvrdá kontrola env, ať je hned vidět proč by to padlo
+  const SITE = process.env.BLOBS_SITE_ID || "";
+  const TOKEN = process.env.BLOBS_TOKEN || "";
+  if (!SITE || !TOKEN) {
+    return {
+      statusCode: 500,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ok: false,
+        error: "Missing Netlify Blobs credentials",
+        BLOBS_SITE_ID: !!SITE,
+        BLOBS_TOKEN: !!TOKEN,
+        hint: "Zkontroluj Netlify → Site settings → Environment variables a redeploy.",
+      }),
+    };
+  }
+
   try {
     const { getStore } = await import("@netlify/blobs");
-    const store = getStore("seed", {
-      siteID: process.env.BLOBS_SITE_ID,
-      token: process.env.BLOBS_TOKEN,
-    });
+    const store = getStore("seed", { siteID: SITE, token: TOKEN });
 
     const { entry = {} } = JSON.parse(event.body || "{}");
     if (!entry.userId || !entry.productId || !entry.date) {
