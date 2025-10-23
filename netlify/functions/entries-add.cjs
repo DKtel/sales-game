@@ -1,49 +1,44 @@
-// Public: přidá jeden prodej (append do pole v Blobs)
+"use strict";
+
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: "Method Not Allowed" };
+    return { statusCode: 405, body: "Use POST" };
   }
 
   try {
     const { getStore } = await import("@netlify/blobs");
-    const store = getStore("seed");
+    const store = getStore("seed", {
+      siteID: process.env.BLOBS_SITE_ID,
+      token: process.env.BLOBS_TOKEN,
+    });
 
-    const body = JSON.parse(event.body || "{}");
-    const entry = body.entry || {};
-
-    // základní validace (co potřebujeme pro správný záznam)
-    if (
-      !entry.userId ||
-      !entry.productId ||
-      !Number(entry.quantity) ||
-      !entry.date ||
-      typeof entry.points !== "number"
-    ) {
-      return { statusCode: 400, body: "Invalid entry payload" };
+    const { entry = {} } = JSON.parse(event.body || "{}");
+    if (!entry.userId || !entry.productId || !entry.date) {
+      return { statusCode: 400, body: "Missing fields" };
     }
 
-    const now = Date.now();
-    const serverEntry = {
-      id: entry.id || `${now}-${Math.random().toString(36).slice(2)}`,
+    const { randomUUID } = await import("node:crypto").catch(() => ({ randomUUID: null }));
+    const saved = {
+      id: entry.id || (randomUUID ? randomUUID() : (Math.random().toString(36).slice(2) + Date.now().toString(36))),
+      createdAt: entry.createdAt || Date.now(),
       userId: entry.userId,
       productId: entry.productId,
-      quantity: Number(entry.quantity),
-      date: entry.date,
-      note: entry.note || "",
+      quantity: Number(entry.quantity) || 0,
+      date: String(entry.date),
+      note: String(entry.note || ""),
       points: Number(entry.points) || 0,
-      createdAt: now,
     };
 
-    const entries = (await store.get("entries", { type: "json" })) || [];
-    entries.unshift(serverEntry);
-    await store.setJSON("entries", entries);
+    const current = (await store.get("entries", { type: "json" })) || [];
+    const next = Array.isArray(current) ? [saved, ...current] : [saved];
+    await store.set("entries", next, { metadata: { updatedAt: Date.now() } });
 
     return {
       statusCode: 200,
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ok: true, entry: serverEntry, count: entries.length }),
+      body: JSON.stringify({ ok: true, entry: saved }),
     };
-  } catch (e) {
-    return { statusCode: 500, body: `Error: ${e.message}` };
+  } catch (err) {
+    return { statusCode: 500, body: "err: " + (err?.message || String(err)) };
   }
 };
