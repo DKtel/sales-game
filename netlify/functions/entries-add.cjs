@@ -1,43 +1,39 @@
-"use strict";
+// Uloží jeden prodej jako JSON blob
+const { getStore } = require('@netlify/blobs');
 
 exports.handler = async (event) => {
-  if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: "Use POST" };
-  }
-
   try {
-    // ESM balík – v CJS načteme dynamickým importem
-    const { createClient } = await import("@netlify/blobs");
-
-    const siteID = process.env.BLOBS_SITE_ID;
-    const token  = process.env.BLOBS_TOKEN;
-    if (!siteID || !token) {
-      throw new Error("Missing BLOBS_SITE_ID or BLOBS_TOKEN env.");
+    if (event.httpMethod !== 'POST') {
+      return { statusCode: 405, body: 'Use POST' };
     }
 
-    // ✓ ruční konfigurace klienta
-    const client = createClient({ siteID, token });
-    const store  = client.store("entries");
+    const body = JSON.parse(event.body || '{}');
+    const entry = body.entry || {};
 
-    const { entry } = JSON.parse(event.body || "{}");
-    if (!entry || !entry.userId || !entry.productId || !entry.date || typeof entry.points !== "number") {
-      return { statusCode: 400, body: "Missing required fields." };
+    // rychlá validace
+    if (!entry.userId || !entry.productId || !entry.date) {
+      return { statusCode: 400, body: 'Missing required fields' };
     }
 
-    const id = entry.id || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    // Fallback: když Netlify neprovdí klienta, použijeme siteID + token z env
+    const opts = (process.env.BLOBS_SITE_ID && process.env.BLOBS_TOKEN)
+      ? { siteID: process.env.BLOBS_SITE_ID, token: process.env.BLOBS_TOKEN }
+      : undefined;
 
-    const raw   = await store.get("entries");
-    const list  = raw ? JSON.parse(raw) : [];
-    list.push({ ...entry, id, createdAt: Date.now() });
+    const store = getStore('sales-game-entries', opts);
 
-    await store.set("entries", JSON.stringify(list), { metadata: { updatedAt: Date.now() } });
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const key = `entries/${id}.json`;
+
+    const doc = { id, createdAt: Date.now(), ...entry };
+    await store.setJSON(key, doc);
 
     return {
       statusCode: 200,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ok: true, count: list.length })
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ok: true, id }),
     };
-  } catch (err) {
-    return { statusCode: 500, body: "err: " + (err?.message || String(err)) };
+  } catch (e) {
+    return { statusCode: 500, body: `err: ${e.message || String(e)}` };
   }
 };
