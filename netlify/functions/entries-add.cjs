@@ -5,9 +5,8 @@ exports.handler = async (event) => {
     return { statusCode: 405, body: "Use POST" };
   }
 
-  // --- tvrdá kontrola env, ať je hned vidět proč by to padlo
-  const SITE = process.env.BLOBS_SITE_ID || "";
-  const TOKEN = process.env.BLOBS_TOKEN || "";
+  const SITE  = process.env.BLOBS_SITE_ID || "";
+  const TOKEN = process.env.BLOBS_TOKEN   || "";
   if (!SITE || !TOKEN) {
     return {
       statusCode: 500,
@@ -16,9 +15,8 @@ exports.handler = async (event) => {
         ok: false,
         error: "Missing Netlify Blobs credentials",
         BLOBS_SITE_ID: !!SITE,
-        BLOBS_TOKEN: !!TOKEN,
-        hint: "Zkontroluj Netlify → Site settings → Environment variables a redeploy.",
-      }),
+        BLOBS_TOKEN: !!TOKEN
+      })
     };
   }
 
@@ -35,22 +33,22 @@ exports.handler = async (event) => {
     const saved = {
       id: entry.id || (randomUUID ? randomUUID() : (Math.random().toString(36).slice(2) + Date.now().toString(36))),
       createdAt: entry.createdAt || Date.now(),
-      userId: entry.userId,
-      productId: entry.productId,
+      userId: String(entry.userId),
+      productId: String(entry.productId),
       quantity: Number(entry.quantity) || 0,
       date: String(entry.date),
       note: String(entry.note || ""),
-      points: Number(entry.points) || 0,
+      points: Number(entry.points) || 0
     };
 
-    const current = (await store.get("entries", { type: "json" })) || [];
-    const next = Array.isArray(current) ? [saved, ...current] : [saved];
+    const cur = (await store.get("entries", { type: "json" })) || [];
+    const next = Array.isArray(cur) ? [saved, ...cur] : [saved];
     await store.set("entries", next, { metadata: { updatedAt: Date.now() } });
 
     return {
       statusCode: 200,
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ok: true, entry: saved }),
+      body: JSON.stringify({ ok: true, entry: saved })
     };
   } catch (err) {
     return { statusCode: 500, body: "err: " + (err?.message || String(err)) };
