@@ -1,11 +1,27 @@
 "use strict";
 
 exports.handler = async (event) => {
+  // Pomocný diagnostický ping: /.netlify/functions/entries-add?diag=1
+  if (event.httpMethod === "GET" && (event.queryStringParameters?.diag === "1")) {
+    const siteID = String(process.env.BLOBS_SITE_ID || "");
+    const token  = String(process.env.BLOBS_TOKEN || "");
+    return {
+      statusCode: 200,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ok: true,
+        hasSiteID: !!siteID, siteIDLen: siteID.length,
+        hasToken: !!token, tokenLen: token.length,
+        tokenPreview: token ? token.slice(0, 6) + "…" + token.slice(-4) : "",
+        node: process.version
+      })
+    };
+  }
+
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Use POST" };
   }
 
-  // Bezpečné parsování payloadu
   let body;
   try {
     body = JSON.parse(event.body || "{}");
@@ -24,43 +40,40 @@ exports.handler = async (event) => {
     return { statusCode: 400, body: "Invalid payload" };
   }
 
-  // ---- Netlify Blobs config (nutné) ----
-  const siteID = (process.env.BLOBS_SITE_ID || "").trim();
-  const token  = (process.env.BLOBS_TOKEN   || "").trim();
+  // ---- Netlify Blobs explicit config (NEZKRACOVAT) ----
+  const siteID = String(process.env.BLOBS_SITE_ID || "");
+  const token  = String(process.env.BLOBS_TOKEN || "");
 
   if (!siteID || !token) {
-    return {
-      statusCode: 500,
-      body: "Missing BLOBS_SITE_ID / BLOBS_TOKEN env vars",
-    };
+    return { statusCode: 500, body: "Missing BLOBS_SITE_ID / BLOBS_TOKEN env vars" };
   }
 
   try {
-    const { getStore } = await import("@netlify/blobs");
-    const store = getStore("entries", { siteID, token });
+    const mod = await import("@netlify/blobs");
+    const store = mod.getStore("entries", { siteID: siteID, token: token });
 
-    // Vytvoř vlastní ID + doplň serverové sloupce
     const id = `e_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const record = {
       id,
       createdAt: Date.now(),
-      ...entry,
+      userId: String(entry.userId),
+      productId: String(entry.productId),
+      quantity: Number(entry.quantity),
+      date: String(entry.date),
+      note: String(entry.note || ""),
+      points: Number(entry.points)
     };
 
-    // Ulož jako JSON (bezpečné explicitní serializování)
     await store.set(`entries/${id}.json`, JSON.stringify(record), {
-      metadata: { type: "entry", createdAt: new Date().toISOString() },
+      metadata: { type: "entry", createdAt: new Date().toISOString() }
     });
 
     return {
       statusCode: 200,
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ok: true, id }),
+      body: JSON.stringify({ ok: true, id })
     };
   } catch (err) {
-    return {
-      statusCode: 500,
-      body: "err: " + (err?.message || String(err)),
-    };
+    return { statusCode: 500, body: "err: " + (err?.message || String(err)) };
   }
 };
