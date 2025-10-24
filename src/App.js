@@ -788,7 +788,7 @@ export default function SalesGameApp() {
       <header className="bg-white sticky top-0 z-10 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-black text-white flex items-center justify-center font-bold">
+            <div className="w-16 h-8 rounded-xl bg-black text-white flex items-center justify-center font-bold">
               DKtel
             </div>
             <h1 className="font-bold">Vánoční soutěž</h1>
