@@ -1,37 +1,52 @@
-// Vrátí všechny uložené prodeje
-const { getStore } = require('@netlify/blobs');
+"use strict";
 
-exports.handler = async () => {
+exports.handler = async (event) => {
+  // Pomocná diagnostika: /.netlify/functions/entries-list?diag=1
+  if (event.httpMethod === "GET" && (event.queryStringParameters?.diag === "1")) {
+    const siteID = String(process.env.BLOBS_SITE_ID || "");
+    const token  = String(process.env.BLOBS_TOKEN || "");
+    return {
+      statusCode: 200,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ok: true,
+        hasSiteID: !!siteID, siteIDLen: siteID.length,
+        hasToken: !!token, tokenLen: token.length,
+        tokenPreview: token ? token.slice(0, 6) + "…" + token.slice(-4) : "",
+        node: process.version
+      })
+    };
+  }
+
+  if (event.httpMethod !== "GET") {
+    return { statusCode: 405, body: "Use GET" };
+  }
+
+  const siteID = String(process.env.BLOBS_SITE_ID || "");
+  const token  = String(process.env.BLOBS_TOKEN || "");
+  if (!siteID || !token) {
+    return { statusCode: 500, body: "Missing BLOBS_SITE_ID / BLOBS_TOKEN env vars" };
+  }
+
   try {
-    const opts = (process.env.BLOBS_SITE_ID && process.env.BLOBS_TOKEN)
-      ? { siteID: process.env.BLOBS_SITE_ID, token: process.env.BLOBS_TOKEN }
-      : undefined;
+    const mod = await import("@netlify/blobs");
+    const store = mod.getStore("entries", { siteID: siteID, token: token });
 
-    const store = getStore('sales-game-entries', opts);
-
-    // načteme všechny klíče (stránkovaně)
-    let cursor;
-    const keys = [];
-    do {
-      const page = await store.list({ prefix: 'entries/', cursor });
-      (page.blobs || []).forEach(b => keys.push(b.key));
-      cursor = page.cursor;
-    } while (cursor);
-
-    // dotáhneme JSONy
-    const entries = [];
-    for (const key of keys) {
-      const obj = await store.getJSON(key).catch(() => null);
-      if (obj) entries.push(obj);
+    const listed = await store.list({ prefix: "entries/" });
+    const items = [];
+    for (const b of listed.blobs || []) {
+      const res = await store.get(b.key);
+      const txt = await res.text();
+      try { items.push(JSON.parse(txt)); } catch { /* ignore */ }
     }
-    entries.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
     return {
       statusCode: 200,
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ok: true, count: entries.length, entries }),
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ok: true, count: items.length, items })
     };
-  } catch (e) {
-    return { statusCode: 500, body: `err: ${e.message || String(e)}` };
+  } catch (err) {
+    return { statusCode: 500, body: "err: " + (err?.message || String(err)) };
   }
 };
