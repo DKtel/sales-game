@@ -1,32 +1,24 @@
-import { createClient } from '@netlify/blobs';
-
-function json(body, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json; charset=utf-8' },
-  });
-}
+// netlify/functions/entries-diag.mjs
+import { makeStore } from './_blobs.mjs';
 
 export default async () => {
   try {
-    const siteID = process.env.BLOBS_SITE_ID;
-    const token = process.env.BLOBS_TOKEN;
+    const store = makeStore();
+    // jednoduchý ping na blob store
+    await store.set('__diag.txt', `ok ${new Date().toISOString()}`);
+    const ok = await store.get('__diag.txt', { type: 'text' });
 
-    const client = createClient({ siteID, token });
-    const store = client.store('entries');
-
-    // jednoduchý smoke test
-    const testKey = `diag-${Date.now()}`;
-    await store.setJSON(testKey, { ok: true });
-    const back = await store.get(testKey, { type: 'json' });
-
-    return json({
-      okEnv: Boolean(siteID && token),
-      siteIdLen: siteID?.length || 0,
-      tokenPreview: token?.slice(0, 6) + '…',
-      wroteAndRead: back?.ok === true,
-    });
-  } catch (e) {
-    return new Response(`err: ${e.message}`, { status: 500 });
+    return new Response(JSON.stringify({
+      ok: true,
+      hasSiteID: !!process.env.BLOBS_SITE_ID,
+      hasToken: !!process.env.BLOBS_TOKEN,
+      ping: ok?.trim(),
+      node: process.version,
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  } catch (err) {
+    return new Response(
+      `err: ${err?.message || String(err)}`,
+      { status: 500, headers: { 'content-type': 'text/plain; charset=utf-8' } }
+    );
   }
 };
