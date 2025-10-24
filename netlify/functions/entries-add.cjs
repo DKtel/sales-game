@@ -1,39 +1,79 @@
-// Uloží jeden prodej jako JSON blob
-const { getStore } = require('@netlify/blobs');
+"use strict";
 
 exports.handler = async (event) => {
+  // Pomocný diagnostický ping: /.netlify/functions/entries-add?diag=1
+  if (event.httpMethod === "GET" && (event.queryStringParameters?.diag === "1")) {
+    const siteID = String(process.env.BLOBS_SITE_ID || "");
+    const token  = String(process.env.BLOBS_TOKEN || "");
+    return {
+      statusCode: 200,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ok: true,
+        hasSiteID: !!siteID, siteIDLen: siteID.length,
+        hasToken: !!token, tokenLen: token.length,
+        tokenPreview: token ? token.slice(0, 6) + "…" + token.slice(-4) : "",
+        node: process.version
+      })
+    };
+  }
+
+  if (event.httpMethod !== "POST") {
+    return { statusCode: 405, body: "Use POST" };
+  }
+
+  let body;
   try {
-    if (event.httpMethod !== 'POST') {
-      return { statusCode: 405, body: 'Use POST' };
-    }
+    body = JSON.parse(event.body || "{}");
+  } catch {
+    return { statusCode: 400, body: "Bad JSON" };
+  }
 
-    const body = JSON.parse(event.body || '{}');
-    const entry = body.entry || {};
+  const entry = body.entry || {};
+  if (
+    !entry.userId ||
+    !entry.productId ||
+    typeof entry.quantity !== "number" ||
+    !entry.date ||
+    typeof entry.points !== "number"
+  ) {
+    return { statusCode: 400, body: "Invalid payload" };
+  }
 
-    // rychlá validace
-    if (!entry.userId || !entry.productId || !entry.date) {
-      return { statusCode: 400, body: 'Missing required fields' };
-    }
+  // ---- Netlify Blobs explicit config (NEZKRACOVAT) ----
+  const siteID = String(process.env.BLOBS_SITE_ID || "");
+  const token  = String(process.env.BLOBS_TOKEN || "");
 
-    // Fallback: když Netlify neprovdí klienta, použijeme siteID + token z env
-    const opts = (process.env.BLOBS_SITE_ID && process.env.BLOBS_TOKEN)
-      ? { siteID: process.env.BLOBS_SITE_ID, token: process.env.BLOBS_TOKEN }
-      : undefined;
+  if (!siteID || !token) {
+    return { statusCode: 500, body: "Missing BLOBS_SITE_ID / BLOBS_TOKEN env vars" };
+  }
 
-    const store = getStore('sales-game-entries', opts);
+  try {
+    const mod = await import("@netlify/blobs");
+    const store = mod.getStore("entries", { siteID: siteID, token: token });
 
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const key = `entries/${id}.json`;
+    const id = `e_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const record = {
+      id,
+      createdAt: Date.now(),
+      userId: String(entry.userId),
+      productId: String(entry.productId),
+      quantity: Number(entry.quantity),
+      date: String(entry.date),
+      note: String(entry.note || ""),
+      points: Number(entry.points)
+    };
 
-    const doc = { id, createdAt: Date.now(), ...entry };
-    await store.setJSON(key, doc);
+    await store.set(`entries/${id}.json`, JSON.stringify(record), {
+      metadata: { type: "entry", createdAt: new Date().toISOString() }
+    });
 
     return {
       statusCode: 200,
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ok: true, id }),
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ok: true, id })
     };
-  } catch (e) {
-    return { statusCode: 500, body: `err: ${e.message || String(e)}` };
+  } catch (err) {
+    return { statusCode: 500, body: "err: " + (err?.message || String(err)) };
   }
 };
