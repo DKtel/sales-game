@@ -1,27 +1,23 @@
-import { createClient } from '@netlify/blobs';
-
-function json(body, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json; charset=utf-8' },
-  });
-}
+// netlify/functions/entries-list.mjs
+import { makeStore } from './_blobs.mjs';
 
 export default async () => {
   try {
-    const client = createClient({
-      siteID: process.env.BLOBS_SITE_ID,
-      token: process.env.BLOBS_TOKEN,
+    const store = makeStore();
+
+    // přečteme JSON z klíče entries.json (pokud neexistuje, vrátíme [])
+    let entries = await store.get('entries.json', { type: 'json' });
+    if (!Array.isArray(entries)) entries = [];
+
+    return new Response(JSON.stringify({ ok: true, entries }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
     });
-    const store = client.store('entries');
-
-    const { blobs } = await store.list(); // [{ key, ... }]
-    const items = await Promise.all(
-      blobs.map(b => store.get(b.key, { type: 'json' }))
+  } catch (err) {
+    console.error('entries-list error:', err);
+    return new Response(
+      `err: ${err?.message || String(err)}`,
+      { status: 500, headers: { 'content-type': 'text/plain; charset=utf-8' } }
     );
-
-    return json({ ok: true, count: items.length, items });
-  } catch (e) {
-    return new Response(`err: ${e.message}`, { status: 500 });
   }
 };
