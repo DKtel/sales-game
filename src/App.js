@@ -79,7 +79,8 @@ const api = {
     if (!r.ok || !d.ok) {
       throw new Error(d.error || `HTTP ${r.status}`);
     }
-    return d.entry;
+    // backend vrací { ok:true, saved:{...} } — ale pro jistotu podporujeme i { entry:{...} }
+    return d.saved || d.entry;
   },
 };
 
