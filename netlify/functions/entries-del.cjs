@@ -1,9 +1,8 @@
-// netlify/functions/entries-del.cjs
-/* Smazání záznamu (idempotentní) + diagnostika:
-   - GET  ?diag=1 -> vrátí stav env (bez mazání)
-   - POST { id }  -> smaže položku s daným id ze souboru entries.json
-   - snese oba tvary dat: [] i { entries: [] }
+/* Smazání záznamu z Netlify Blobs.
+   - GET  ?diag=1  -> diagnostika env
+   - POST { id }   -> smaže záznam
 */
+const { createClient } = require("@netlify/blobs");
 
 const STORE_NAME = "sales-game";
 const ENTRIES_KEY = "entries.json";
@@ -14,23 +13,17 @@ const json = (status, data) => ({
   body: JSON.stringify(data),
 });
 
-async function getCreateClient() {
-  // Bezpečné získání createClient i v různých module export tvarech
-  const m = await import("@netlify/blobs");
-  return m.createClient || (m.default && m.default.createClient);
-}
-
 exports.handler = async (event) => {
   try {
-    // Diagnostika
+    // Diagnostika prostředí
     if (event.httpMethod === "GET" && event.queryStringParameters?.diag) {
-      const okSite = !!process.env.BLOBS_SITE_ID;
-      const okToken = !!process.env.BLOBS_TOKEN;
+      const hasSiteID = !!process.env.BLOBS_SITE_ID;
+      const hasToken = !!process.env.BLOBS_TOKEN;
       return json(200, {
-        ok: okSite && okToken,
-        hasSiteID: okSite,
+        ok: hasSiteID && hasToken,
+        hasSiteID,
         siteIDLen: (process.env.BLOBS_SITE_ID || "").length,
-        hasToken: okToken,
+        hasToken,
         tokenLen: (process.env.BLOBS_TOKEN || "").length,
         node: process.version,
       });
@@ -41,43 +34,35 @@ exports.handler = async (event) => {
     }
 
     let body = {};
-    try {
-      body = JSON.parse(event.body || "{}");
-    } catch {
-      return json(400, { ok: false, error: "Invalid JSON body" });
-    }
+    try { body = JSON.parse(event.body || "{}"); }
+    catch { return json(400, { ok: false, error: "Invalid JSON body" }); }
 
     const id = String(body.id || "").trim();
     if (!id) return json(400, { ok: false, error: "Missing 'id'" });
 
-    const createClient = await getCreateClient();
-    if (typeof createClient !== "function") {
-      return json(500, { ok: false, error: "createClient export not found" });
-    }
-
+    // Netlify Blobs klient (stejně jako u add/list)
     const client = createClient({
       siteID: process.env.BLOBS_SITE_ID,
       token: process.env.BLOBS_TOKEN,
     });
     const store = client.store(STORE_NAME);
 
-    // Načti aktuální data
-    let current = await store.get(ENTRIES_KEY, { type: "json" }).catch(() => null);
+    // Načti stávající data
+    let data = await store.get(ENTRIES_KEY, { type: "json" }).catch(() => null);
     let shape = "array";
-    if (Array.isArray(current)) {
-      // ok
-    } else if (current && Array.isArray(current.entries)) {
+    if (Array.isArray(data)) {
+      // OK
+    } else if (data && Array.isArray(data.entries)) {
       shape = "object";
-      current = current.entries;
+      data = data.entries;
     } else {
-      current = [];
-      shape = "array";
+      data = [];
     }
 
-    const existed = current.some((e) => e && e.id === id);
-    const filtered = existed ? current.filter((e) => e && e.id !== id) : current;
+    const existed = data.some((e) => e && e.id === id);
+    const filtered = existed ? data.filter((e) => e && e.id !== id) : data;
 
-    // Zápis jen pokud se změnilo
+    // Zapiš jen když se něco mění
     if (existed) {
       const out = shape === "object" ? { entries: filtered } : filtered;
       await store.set(ENTRIES_KEY, JSON.stringify(out, null, 2), {
@@ -92,6 +77,6 @@ exports.handler = async (event) => {
       remaining: filtered.length,
     });
   } catch (err) {
-    return json(500, { ok: false, error: String(err && err.message || err) });
+    return json(500, { ok: false, error: String(err?.message || err) });
   }
 };
