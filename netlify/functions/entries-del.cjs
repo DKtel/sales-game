@@ -1,8 +1,11 @@
 /* Smazání záznamu z Netlify Blobs.
-   - GET  ?diag=1  -> diagnostika env
-   - POST { id }   -> smaže záznam
+   - GET  ?diag=1  -> diagnostika prostředí
+   - POST { id }   -> smaže záznam (idempotentně)
 */
-const { createClient } = require("@netlify/blobs");
+const blobsMod = require("@netlify/blobs");
+
+const createClient =
+  blobsMod.createClient || (blobsMod.default && blobsMod.default.createClient);
 
 const STORE_NAME = "sales-game";
 const ENTRIES_KEY = "entries.json";
@@ -15,16 +18,18 @@ const json = (status, data) => ({
 
 exports.handler = async (event) => {
   try {
-    // Diagnostika prostředí
+    // Diagnostika
     if (event.httpMethod === "GET" && event.queryStringParameters?.diag) {
-      const hasSiteID = !!process.env.BLOBS_SITE_ID;
-      const hasToken = !!process.env.BLOBS_TOKEN;
       return json(200, {
-        ok: hasSiteID && hasToken,
-        hasSiteID,
+        ok:
+          !!process.env.BLOBS_SITE_ID &&
+          !!process.env.BLOBS_TOKEN &&
+          !!createClient,
+        hasSiteID: !!process.env.BLOBS_SITE_ID,
         siteIDLen: (process.env.BLOBS_SITE_ID || "").length,
-        hasToken,
+        hasToken: !!process.env.BLOBS_TOKEN,
         tokenLen: (process.env.BLOBS_TOKEN || "").length,
+        hasCreateClient: !!createClient,
         node: process.version,
       });
     }
@@ -33,25 +38,32 @@ exports.handler = async (event) => {
       return json(405, { ok: false, error: "Method Not Allowed" });
     }
 
-    let body = {};
-    try { body = JSON.parse(event.body || "{}"); }
-    catch { return json(400, { ok: false, error: "Invalid JSON body" }); }
+    if (!createClient) {
+      return json(500, { ok: false, error: "createClient export not found" });
+    }
 
+    // vstup
+    let body = {};
+    try {
+      body = JSON.parse(event.body || "{}");
+    } catch {
+      return json(400, { ok: false, error: "Invalid JSON body" });
+    }
     const id = String(body.id || "").trim();
     if (!id) return json(400, { ok: false, error: "Missing 'id'" });
 
-    // Netlify Blobs klient (stejně jako u add/list)
+    // klient + store
     const client = createClient({
       siteID: process.env.BLOBS_SITE_ID,
       token: process.env.BLOBS_TOKEN,
     });
     const store = client.store(STORE_NAME);
 
-    // Načti stávající data
+    // načti existující záznamy (podpora obou tvarů: [] nebo {entries:[]})
     let data = await store.get(ENTRIES_KEY, { type: "json" }).catch(() => null);
     let shape = "array";
     if (Array.isArray(data)) {
-      // OK
+      // ok
     } else if (data && Array.isArray(data.entries)) {
       shape = "object";
       data = data.entries;
@@ -60,11 +72,10 @@ exports.handler = async (event) => {
     }
 
     const existed = data.some((e) => e && e.id === id);
-    const filtered = existed ? data.filter((e) => e && e.id !== id) : data;
+    const after = existed ? data.filter((e) => e && e.id !== id) : data;
 
-    // Zapiš jen když se něco mění
     if (existed) {
-      const out = shape === "object" ? { entries: filtered } : filtered;
+      const out = shape === "object" ? { entries: after } : after;
       await store.set(ENTRIES_KEY, JSON.stringify(out, null, 2), {
         contentType: "application/json",
       });
@@ -74,7 +85,7 @@ exports.handler = async (event) => {
       ok: true,
       deleted: existed,
       notFound: !existed,
-      remaining: filtered.length,
+      remaining: after.length,
     });
   } catch (err) {
     return json(500, { ok: false, error: String(err?.message || err) });
