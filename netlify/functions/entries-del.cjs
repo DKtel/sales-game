@@ -1,11 +1,8 @@
-/* Smazání záznamu z Netlify Blobs.
-   - GET  ?diag=1  -> diagnostika prostředí
+/* Smazání prodejního záznamu z Netlify Blobs.
+   - GET  ?diag=1  -> diagnostika
    - POST { id }   -> smaže záznam (idempotentně)
 */
 const blobsMod = require("@netlify/blobs");
-
-const createClient =
-  blobsMod.createClient || (blobsMod.default && blobsMod.default.createClient);
 
 const STORE_NAME = "sales-game";
 const ENTRIES_KEY = "entries.json";
@@ -16,6 +13,42 @@ const json = (status, data) => ({
   body: JSON.stringify(data),
 });
 
+// Bezpečné získání "store" (podporuje různé exporty balíčku)
+function getStoreSafe() {
+  const hasGetStore =
+    typeof blobsMod.getStore === "function" ||
+    (blobsMod.default && typeof blobsMod.default.getStore === "function");
+
+  const hasCreateClient =
+    typeof blobsMod.createClient === "function" ||
+    (blobsMod.default && typeof blobsMod.default.createClient === "function");
+
+  // 1) Preferuj getStore (funguje v některých bundlovacích režimech)
+  if (hasGetStore) {
+    const getStore =
+      blobsMod.getStore || (blobsMod.default && blobsMod.default.getStore);
+    return getStore({
+      name: STORE_NAME,
+      siteID: process.env.BLOBS_SITE_ID,
+      token: process.env.BLOBS_TOKEN,
+    });
+  }
+
+  // 2) Fallback: createClient → store(name)
+  if (hasCreateClient) {
+    const createClient =
+      blobsMod.createClient ||
+      (blobsMod.default && blobsMod.default.createClient);
+    const client = createClient({
+      siteID: process.env.BLOBS_SITE_ID,
+      token: process.env.BLOBS_TOKEN,
+    });
+    return client.store(STORE_NAME);
+  }
+
+  return null;
+}
+
 exports.handler = async (event) => {
   try {
     // Diagnostika
@@ -24,12 +57,18 @@ exports.handler = async (event) => {
         ok:
           !!process.env.BLOBS_SITE_ID &&
           !!process.env.BLOBS_TOKEN &&
-          !!createClient,
+          !!getStoreSafe(),
         hasSiteID: !!process.env.BLOBS_SITE_ID,
         siteIDLen: (process.env.BLOBS_SITE_ID || "").length,
         hasToken: !!process.env.BLOBS_TOKEN,
         tokenLen: (process.env.BLOBS_TOKEN || "").length,
-        hasCreateClient: !!createClient,
+        hasGetStore:
+          typeof blobsMod.getStore === "function" ||
+          (blobsMod.default && typeof blobsMod.default.getStore === "function"),
+        hasCreateClient:
+          typeof blobsMod.createClient === "function" ||
+          (blobsMod.default &&
+            typeof blobsMod.default.createClient === "function"),
         node: process.version,
       });
     }
@@ -38,11 +77,7 @@ exports.handler = async (event) => {
       return json(405, { ok: false, error: "Method Not Allowed" });
     }
 
-    if (!createClient) {
-      return json(500, { ok: false, error: "createClient export not found" });
-    }
-
-    // vstup
+    // Vstup
     let body = {};
     try {
       body = JSON.parse(event.body || "{}");
@@ -52,18 +87,16 @@ exports.handler = async (event) => {
     const id = String(body.id || "").trim();
     if (!id) return json(400, { ok: false, error: "Missing 'id'" });
 
-    // klient + store
-    const client = createClient({
-      siteID: process.env.BLOBS_SITE_ID,
-      token: process.env.BLOBS_TOKEN,
-    });
-    const store = client.store(STORE_NAME);
+    const store = getStoreSafe();
+    if (!store) {
+      return json(500, { ok: false, error: "No blobs client available" });
+    }
 
-    // načti existující záznamy (podpora obou tvarů: [] nebo {entries:[]})
+    // Načti entries (podpora dvou tvarů: [] i {entries:[]})
     let data = await store.get(ENTRIES_KEY, { type: "json" }).catch(() => null);
     let shape = "array";
     if (Array.isArray(data)) {
-      // ok
+      // OK
     } else if (data && Array.isArray(data.entries)) {
       shape = "object";
       data = data.entries;
