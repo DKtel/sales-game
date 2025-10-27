@@ -1,12 +1,12 @@
 // netlify/functions/entries-del.cjs
+/* Smaže záznam podle id z Netlify Blobs (store: "sales-game", key: "entries.json").
+   Idempotentní: i když položka neexistuje, vrátí ok:true (notFound:true). */
 
-// Konfigurace – musí sedět s entries-add / entries-list
 const STORE_NAME = "sales-game";
 const ENTRIES_KEY = "entries.json";
 
-// Pomocná odpověď
-const json = (statusCode, obj) => ({
-  statusCode,
+const json = (status, obj) => ({
+  statusCode: status,
   headers: { "content-type": "application/json; charset=utf-8" },
   body: JSON.stringify(obj),
 });
@@ -25,11 +25,8 @@ exports.handler = async (event) => {
     }
 
     const id = String(body.id || "").trim();
-    if (!id) {
-      return json(400, { ok: false, error: "Missing 'id' in body" });
-    }
+    if (!id) return json(400, { ok: false, error: "Missing 'id'" });
 
-    // @netlify/blobs je ESM – v CJS použijeme dynamický import
     const { createClient } = await import("@netlify/blobs");
 
     const client = createClient({
@@ -38,27 +35,24 @@ exports.handler = async (event) => {
     });
 
     const store = client.store(STORE_NAME);
-
-    // Načti stávající pole záznamů
     const current =
       (await store.get(ENTRIES_KEY, { type: "json" }).catch(() => null)) || [];
+
     if (!Array.isArray(current)) {
       return json(500, { ok: false, error: "Entries blob has invalid format" });
     }
 
-    // Pokud záznam neexistuje, vrátíme 404 (není to fatální, ale dává smysl)
     const exists = current.some((e) => e && e.id === id);
-    if (!exists) {
-      return json(404, { ok: false, error: "Entry not found" });
+    const next = exists ? current.filter((e) => e && e.id !== id) : current;
+
+    if (exists) {
+      await store.set(ENTRIES_KEY, JSON.stringify(next, null, 2), {
+        contentType: "application/json",
+      });
     }
 
-    const next = current.filter((e) => e && e.id !== id);
-
-    await store.set(ENTRIES_KEY, JSON.stringify(next, null, 2), {
-      contentType: "application/json",
-    });
-
-    return json(200, { ok: true, deleted: id, remaining: next.length });
+    // Idempotentní chování: i když neexistuje, je to "OK".
+    return json(200, { ok: true, deleted: exists, notFound: !exists, remaining: next.length });
   } catch (err) {
     return json(500, { ok: false, error: String(err && err.message || err) });
   }
