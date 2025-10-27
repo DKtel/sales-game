@@ -1,6 +1,6 @@
 /* Smazání prodejního záznamu z Netlify Blobs.
-   - GET  ?diag=1  -> diagnostika
-   - POST { id }   -> smaže záznam (idempotentně)
+   - GET  ?diag=1           -> diagnostika
+   - POST { id: "..." }     -> smaže záznam, vrátí aktualizovaný seznam
 */
 const blobsMod = require("@netlify/blobs");
 
@@ -9,11 +9,15 @@ const ENTRIES_KEY = "entries.json";
 
 const json = (status, data) => ({
   statusCode: status,
-  headers: { "content-type": "application/json; charset=utf-8" },
+  headers: {
+    "content-type": "application/json; charset=utf-8",
+    // aby se nikdy nevracel z cache
+    "cache-control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+  },
   body: JSON.stringify(data),
 });
 
-// Bezpečné získání "store" (podporuje různé exporty balíčku)
+// univerzální získání store (podporuje různé exporty balíčku)
 function getStoreSafe() {
   const hasGetStore =
     typeof blobsMod.getStore === "function" ||
@@ -23,7 +27,6 @@ function getStoreSafe() {
     typeof blobsMod.createClient === "function" ||
     (blobsMod.default && typeof blobsMod.default.createClient === "function");
 
-  // 1) Preferuj getStore (funguje v některých bundlovacích režimech)
   if (hasGetStore) {
     const getStore =
       blobsMod.getStore || (blobsMod.default && blobsMod.default.getStore);
@@ -34,7 +37,6 @@ function getStoreSafe() {
     });
   }
 
-  // 2) Fallback: createClient → store(name)
   if (hasCreateClient) {
     const createClient =
       blobsMod.createClient ||
@@ -88,15 +90,13 @@ exports.handler = async (event) => {
     if (!id) return json(400, { ok: false, error: "Missing 'id'" });
 
     const store = getStoreSafe();
-    if (!store) {
-      return json(500, { ok: false, error: "No blobs client available" });
-    }
+    if (!store) return json(500, { ok: false, error: "No blobs client available" });
 
-    // Načti entries (podpora dvou tvarů: [] i {entries:[]})
+    // Načti entries (podpora [] i {entries:[]})
     let data = await store.get(ENTRIES_KEY, { type: "json" }).catch(() => null);
     let shape = "array";
     if (Array.isArray(data)) {
-      // OK
+      // ok
     } else if (data && Array.isArray(data.entries)) {
       shape = "object";
       data = data.entries;
@@ -107,6 +107,7 @@ exports.handler = async (event) => {
     const existed = data.some((e) => e && e.id === id);
     const after = existed ? data.filter((e) => e && e.id !== id) : data;
 
+    // Ulož, pouze pokud se něco změnilo
     if (existed) {
       const out = shape === "object" ? { entries: after } : after;
       await store.set(ENTRIES_KEY, JSON.stringify(out, null, 2), {
@@ -114,11 +115,12 @@ exports.handler = async (event) => {
       });
     }
 
+    // pošleme rovnou nový seznam (ve tvaru "entries": [...])
     return json(200, {
       ok: true,
       deleted: existed,
       notFound: !existed,
-      remaining: after.length,
+      entries: after,
     });
   } catch (err) {
     return json(500, { ok: false, error: String(err?.message || err) });
