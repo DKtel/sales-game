@@ -68,7 +68,7 @@ const api = {
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok || !d.ok) throw new Error(d.error || `HTTP ${r.status}`);
-    return d; // {ok:true, deleted:boolean, notFound:boolean}
+    return d; // { ok:true, deleted/notFound, remaining }
   },
 };
 
@@ -267,7 +267,7 @@ function MySales({ user, entries, products, onDelete }) {
   );
 }
 
-/* =================== ADMIN PANEL + utility (beze změn kromě drobností) =================== */
+/* =================== ADMIN PANEL (beze změn) =================== */
 function parseCSV(text) {
   const lines = text.trim().split(/\r?\n/);
   const headers = lines.shift().split(",").map((h) => h.trim());
@@ -523,7 +523,6 @@ export default function SalesGameApp() {
     setMe(null);
   };
 
-  // Bootstrap lokálních dat
   useEffect(() => {
     const uRaw = localStorage.getItem(LS_KEYS.USERS);
     const pRaw = localStorage.getItem(LS_KEYS.PRODUCTS);
@@ -540,7 +539,6 @@ export default function SalesGameApp() {
     if (sRaw) setSession(JSON.parse(sRaw));
   }, []);
 
-  // Hydratace ze serveru
   useEffect(() => {
     (async () => {
       try {
@@ -554,7 +552,7 @@ export default function SalesGameApp() {
           setProducts(srvProducts);
         }
         const srvEntries = await api.listEntries();
-        if (srvEntries.length) {
+        if (srvEntries.length >= 0) {
           localStorage.setItem(LS_KEYS.ENTRIES, JSON.stringify(srvEntries));
           setEntries(srvEntries);
         }
@@ -562,7 +560,6 @@ export default function SalesGameApp() {
     })();
   }, []);
 
-  // map session -> me
   useEffect(() => {
     if (!session) return setMe(null);
     setMe(users.find((x) => x.id === session.userId) || null);
@@ -581,7 +578,7 @@ export default function SalesGameApp() {
         return next;
       });
       setTab("leaderboard");
-    } catch {
+    } catch (err) {
       const localFallback = { id: uid(), ...payload, createdAt: Date.now() };
       setEntries((prev) => {
         const next = [localFallback, ...prev];
@@ -597,26 +594,22 @@ export default function SalesGameApp() {
     if (!id) return;
     if (!window.confirm("Opravdu chceš tento prodej smazat?")) return;
 
-    // Optimisticky odeber z UI
     const backup = entries.slice();
     const optimistic = backup.filter((e) => e.id !== id);
     setEntries(optimistic);
     localStorage.setItem(LS_KEYS.ENTRIES, JSON.stringify(optimistic));
 
     try {
-      await api.deleteEntry(id); // idempotentní – i když už není, vrátí ok:true
+      await api.deleteEntry(id);
 
-      // pro jistotu stáhneme serverový stav (třeba smazal někdo jiný)
+      // pro jistotu načteme serverový stav
       const fresh = await api.listEntries();
-      if (Array.isArray(fresh) && fresh.length >= 0) {
-        setEntries(fresh);
-        localStorage.setItem(LS_KEYS.ENTRIES, JSON.stringify(fresh));
-      }
+      setEntries(fresh);
+      localStorage.setItem(LS_KEYS.ENTRIES, JSON.stringify(fresh));
     } catch (err) {
-      // chyba sítě/serveru – vrátíme původní stav
       setEntries(backup);
       localStorage.setItem(LS_KEYS.ENTRIES, JSON.stringify(backup));
-      alert("Smazání na serveru se nepovedlo. Záznam byl obnoven.");
+      alert(`Smazání na serveru se nepovedlo. Záznam byl obnoven.\n${String(err && err.message || err)}`);
     }
   };
 
