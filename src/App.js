@@ -712,7 +712,7 @@ useEffect(() => {
       <header className="bg-white sticky top-0 z-10 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-12 rounded-xl bg-blue text-white flex items-center justify-center font-bold">DKtel</div>
+            <div className="w-8 h-12 rounded-xl bg-black text-white flex items-center justify-center font-bold">DKtel</div>
             <h1 className="font-bold">Vánoční soutěž</h1>
           </div>
           <div className="flex items-center gap-3">
@@ -790,11 +790,14 @@ function Leaderboard({ users, entries, currentUserId }) {
             {totals.map((row, idx) => {
               const isMe = row.user.id === currentUserId;
               return (
+                // Zvýraznění řádku pomocí bg-green-50 zůstává
                 <tr key={row.user.id} className={`border-t ${isMe ? "bg-green-50" : ""}`}>
                   <td className="p-2 font-semibold">{idx + 1}</td>
                   <td className="p-2">
                     {row.user.name}
+                    {/* TATO ČÁST BYLA ODSTRANĚNA: 
                     {isMe && <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 align-middle" />}
+                    */}
                   </td>
                   <td className="p-2 font-bold">{row.points}</td>
                 </tr>
