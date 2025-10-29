@@ -34,15 +34,16 @@ const RULES_CONFIG = {
   period: "1. 11. – 31. 12. 2025",
   imageUrl: "/rules-banner.jpg", // pokud nechceš obrázek, nech prázdný řetězec ""
   intro:
-    "Cílem je nasbírat za listopad a prosinec co nejvíce bodů za prodej hlavních služeb, které jsou specifikované v záložce Zadat prodej. Body se sčítají napříč produkty. Při shodě bodů rozhoduje dřívější dosažení.",
+    "Cílem soutěže je v měsících listopad a prosinec nasbírat co nejvíce bodů za prodej hlavních služeb uvedených v záložce Zadat prodej.",
   rules: [
-    "Vyhodnocení soutěže bude na dokončených objednávkách - GA. Výsledky v záložce Žebříček jsou pouze orientační.",
+    "Vyhodnocení soutěže bude vycházet z dokončených objednávek (GA). Výsledky v záložce Žebříček jsou pouze orientační.",
     "Vyhodnocení soutěže proběhne na lednovém setkání.",
-    "Výhrcem jakékoliv ceny se může stát pouze ten, který bude osobně přitomen na lednovém setkání.",
-    "OZ musí splnit svůj osobní plán v DS plnění na mimálně 80% za měsíc listopad a prosinec v průměru.",
-    "Pokud OZ běží výpovědní lhůta, anebo bude výpověď podána v průběhu listopadu, prosince nebo ledna, tak se hry neúčástní.",
-    "OZ nesmí v průběhu soutěže porušit manuál, jinak bude ze soutěže vyřazen.",
-    "Pokud nebude OZ využívat tuto webovou stránku pro soutěžení, tedy nebude zapisovat svoje prodeje, tak bude ze hry vyřazen.",
+    "Výhercem jakékoli ceny se může stát pouze ten, kdo bude osobně přítomen na lednovém setkání.",
+    "OZ musí splnit svůj osobní plán v DS plnění na minimálně 80 % v průměru za listopad a prosinec.",
+    "Pokud je OZ ve výpovědní lhůtě nebo podá výpověď v průběhu listopadu, prosince či ledna, soutěže se neúčastní.",
+    "OZ nesmí v průběhu soutěže porušit manuál, v opačném případě bude ze soutěže vyřazen.",
+    "Pokud OZ nebude využívat tuto webovou stránku k zapisování svých prodejů, bude ze soutěže vyřazen."
+    "Při shodě bodů rozhoduje větší plnění osobního plánu v DS plnění."
   ],
   rewardsTitle: "Odměny",
   rewards: [
