@@ -14,9 +14,7 @@ const uid = () =>
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
 const DEFAULT_USERS = [
-  { id: "u-admin", name: "Admin", email: "admin@firma.cz", role: "admin", password: "admin" },
-  { id: "u-oz1", name: "Jan Novák", email: "jan.novak@firma.cz", role: "user", password: "jan" },
-  { id: "u-oz2", name: "Petra Veselá", email: "petra.vesela@firma.cz", role: "user", password: "petra" },
+  { id: "u-admin", name: "Admin", email: "michal.horsky@dktel.cz", role: "admin", password: "myTRI2020" },
 ];
 
 const DEFAULT_PRODUCTS = [
@@ -155,7 +153,7 @@ function Login({ onLogin, usersFromApp = [] }) {
           </button>
         </form>
         <p className="text-xs text-gray-400 mt-4">
-          Demo účty: admin@firma.cz / admin, jan.novak@firma.cz / jan, petra.vesela@firma.cz / petra
+         
         </p>
       </div>
     </div>
