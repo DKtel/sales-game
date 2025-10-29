@@ -34,12 +34,15 @@ const RULES_CONFIG = {
   period: "1. 11. – 31. 12. 2025",
   imageUrl: "/rules-banner.jpg", // pokud nechceš obrázek, nech prázdný řetězec ""
   intro:
-    "Cílem je nasbírat co nejvíce bodů za aktivní prodeje. Body se sčítají napříč produkty. Při shodě bodů rozhoduje dřívější dosažení.",
+    "Cílem je nasbírat za listopad a prosinec co nejvíce bodů za prodej hlavních služeb, které jsou specifikované v záložce Zadat prodej. Body se sčítají napříč produkty. Při shodě bodů rozhoduje dřívější dosažení.",
   rules: [
-    "Bodové hodnoty za produkty: viz karta **Produkty & body**.",
-    "Prodej musí být zadán do 24 hodin od uskutečnění.",
-    "Záznamy musí obsahovat pravdivé údaje (kontrolní vzorek proběhne průběžně).",
-    "Na konci soutěže proběhne kontrola duplicit a neplatné záznamy se odečítají.",
+    "Vyhodnocení soutěže bude na dokončených objednávkách - GA. Výsledky v záložce Žebříček jsou pouze orientační.",
+    "Vyhodnocení soutěže proběhne na lednovém setkání.",
+    "Výhrcem jakékoliv ceny se může stát pouze ten, který bude osobně přitomen na lednovém setkání.",
+    "OZ musí splnit svůj osobní plán v DS plnění na mimálně 80% za měsíc listopad a prosinec v průměru.",
+    "Pokud OZ běží výpovědní lhůta, anebo bude výpověď podána v průběhu listopadu, prosince nebo ledna, tak se hry neúčástní.",
+    "OZ nesmí v průběhu soutěže porušit manuál, jinak bude ze soutěže vyřazen.",
+    "Pokud nebude OZ využívat tuto webovou stránku pro soutěžení, tedy nebude zapisovat svoje prodeje, tak bude ze hry vyřazen.",
   ],
   rewardsTitle: "Odměny",
   rewards: [
