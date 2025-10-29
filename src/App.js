@@ -1,7 +1,7 @@
 /* eslint-disable */
 import React, { useEffect, useMemo, useState } from "react";
 
-/* =================== KONSTANTY & POMOCNÉ FUNKCE =================== */
+// =================== KONSTANTY & POMOCNÉ FUNKCE ===================
 const LS_KEYS = {
   USERS: "sales_game_users_v1",
   ENTRIES: "sales_game_entries_v1",
@@ -9,7 +9,8 @@ const LS_KEYS = {
   SESSION: "sales_game_session_v1",
 };
 
-const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+const uid = () =>
+  Math.random().toString(36).slice(2) + Date.now().toString(36);
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
 const DEFAULT_USERS = [
@@ -25,7 +26,7 @@ const DEFAULT_PRODUCTS = [
   { id: "p-internet", name: "Internet", basePoints: 8 },
 ];
 
-/* =================== API (Netlify Functions) =================== */
+// ---- API helpers (serverové funkce) ----
 const api = {
   getSeed: async () => {
     try {
@@ -57,22 +58,26 @@ const api = {
       body: JSON.stringify({ entry }),
     });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok || !d.ok) throw new Error(d.error || `HTTP ${r.status}`);
-    return d.entry || d.saved || entry;
+    if (!r.ok || !d.ok) {
+      throw new Error(d.error || `HTTP ${r.status}`);
+    }
+    return d.entry;
   },
-  deleteEntry: async (id) => {
+  delEntry: async (id) => {
     const r = await fetch("/.netlify/functions/entries-del", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ id }),
     });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok || !d.ok) throw new Error(d.error || `HTTP ${r.status}`);
-    return d; // { ok:true, deleted/notFound, remaining }
+    if (!r.ok || !d.ok) {
+      throw new Error(d.error || `HTTP ${r.status}`);
+    }
+    return d;
   },
 };
 
-/* =================== LOGIN =================== */
+// =================== LOGIN ===================
 function Login({ onLogin, usersFromApp = [] }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -88,6 +93,7 @@ function Login({ onLogin, usersFromApp = [] }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // 1) preferuj seznam z App state
     let users =
       usersFromApp.length
         ? usersFromApp
@@ -95,6 +101,7 @@ function Login({ onLogin, usersFromApp = [] }) {
 
     let u = findMatch(users);
 
+    // 2) fallback: stáhni čerstvé uživatele ze serveru
     if (!u) {
       try {
         const { users: srvUsers } = await api.getSeed();
@@ -141,7 +148,10 @@ function Login({ onLogin, usersFromApp = [] }) {
             />
           </div>
           {error && <p className="text-red-600 text-sm">{error}</p>}
-          <button type="submit" className="w-full bg-black text-white rounded-xl py-2 font-semibold hover:opacity-90">
+          <button
+            type="submit"
+            className="w-full bg-black text-white rounded-xl py-2 font-semibold hover:opacity-90"
+          >
             Přihlásit se
           </button>
         </form>
@@ -153,7 +163,7 @@ function Login({ onLogin, usersFromApp = [] }) {
   );
 }
 
-/* =================== ZADÁNÍ PRODEJE =================== */
+// =================== ZADÁNÍ PRODEJE ===================
 function SalesEntry({ user, products, onAddSale }) {
   const [productId, setProductId] = useState(products[0]?.id || "");
   const [quantity, setQuantity] = useState(1);
@@ -164,7 +174,10 @@ function SalesEntry({ user, products, onAddSale }) {
     if (!productId && products[0]?.id) setProductId(products[0].id);
   }, [products]);
 
-  const selected = useMemo(() => products.find((p) => p.id === productId), [products, productId]);
+  const selected = useMemo(
+    () => products.find((p) => p.id === productId),
+    [products, productId]
+  );
   const computedPoints = useMemo(
     () => (selected ? selected.basePoints * (Number(quantity) || 0) : 0),
     [selected, quantity]
@@ -173,7 +186,13 @@ function SalesEntry({ user, products, onAddSale }) {
   const submit = (e) => {
     e.preventDefault();
     if (!selected) return;
-    onAddSale({ productId, quantity: Number(quantity), date, note, points: computedPoints });
+    onAddSale({
+      productId,
+      quantity: Number(quantity),
+      date,
+      note,
+      points: computedPoints,
+    });
     setQuantity(1);
     setNote("");
   };
@@ -184,7 +203,11 @@ function SalesEntry({ user, products, onAddSale }) {
       <form onSubmit={submit} className="grid md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium mb-1">Produkt</label>
-          <select className="w-full border rounded-xl px-3 py-2" value={productId} onChange={(e) => setProductId(e.target.value)}>
+          <select
+            className="w-full border rounded-xl px-3 py-2"
+            value={productId}
+            onChange={(e) => setProductId(e.target.value)}
+          >
             {products.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name} ( {p.basePoints} b )
@@ -194,15 +217,32 @@ function SalesEntry({ user, products, onAddSale }) {
         </div>
         <div>
           <label className="block text-sm font-medium mb-1">Datum</label>
-          <input type="date" className="w-full border rounded-xl px-3 py-2" value={date} onChange={(e) => setDate(e.target.value)} />
+          <input
+            type="date"
+            className="w-full border rounded-xl px-3 py-2"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+          />
         </div>
         <div>
           <label className="block text-sm font-medium mb-1">Počet kusů</label>
-          <input type="number" min={1} className="w-full border rounded-xl px-3 py-2" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+          <input
+            type="number"
+            min={1}
+            className="w-full border rounded-xl px-3 py-2"
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
+          />
         </div>
         <div>
           <label className="block text-sm font-medium mb-1">Poznámka</label>
-          <input type="text" placeholder="číslo smlouvy, balíček, …" className="w-full border rounded-xl px-3 py-2" value={note} onChange={(e) => setNote(e.target.value)} />
+          <input
+            type="text"
+            placeholder="číslo smlouvy, balíček, …"
+            className="w-full border rounded-xl px-3 py-2"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
         </div>
         <div className="md:col-span-2 flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
           <span className="text-sm text-gray-600">Přidělené body</span>
@@ -218,9 +258,11 @@ function SalesEntry({ user, products, onAddSale }) {
   );
 }
 
-/* =================== MOJE PRODEJE =================== */
+// =================== MOJE PRODEJE ===================
 function MySales({ user, entries, products, onDelete }) {
-  const my = entries.filter((e) => e.userId === user.id).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const my = entries
+    .filter((e) => e.userId === user.id)
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   const productMap = Object.fromEntries(products.map((p) => [p.id, p]));
 
   return (
@@ -235,7 +277,7 @@ function MySales({ user, entries, products, onDelete }) {
               <th className="p-2">Ks</th>
               <th className="p-2">Poznámka</th>
               <th className="p-2">Body</th>
-              <th className="p-2 w-28">Akce</th>
+              <th className="p-2 text-right">Akce</th>
             </tr>
           </thead>
           <tbody>
@@ -246,8 +288,12 @@ function MySales({ user, entries, products, onDelete }) {
                 <td className="p-2">{e.quantity}</td>
                 <td className="p-2">{e.note}</td>
                 <td className="p-2 font-semibold">{e.points}</td>
-                <td className="p-2">
-                  <button className="text-red-600 hover:underline" onClick={() => onDelete?.(e.id)} title="Smazat záznam">
+                <td className="p-2 text-right">
+                  <button
+                    onClick={() => onDelete(e.id)}
+                    className="text-red-600 hover:underline"
+                    title="Smazat prodej"
+                  >
                     Smazat
                   </button>
                 </td>
@@ -267,19 +313,23 @@ function MySales({ user, entries, products, onDelete }) {
   );
 }
 
-/* =================== ADMIN PANEL (beze změn) =================== */
+// =================== IMPORT/EXPORT UTILITY ===================
 function parseCSV(text) {
   const lines = text.trim().split(/\r?\n/);
   const headers = lines.shift().split(",").map((h) => h.trim());
   return lines.map((line) => {
     const cols = line.split(",");
     const obj = {};
-    headers.forEach((h, i) => (obj[h] = (cols[i] || "").trim()));
+    headers.forEach((h, i) => {
+      obj[h] = (cols[i] || "").trim();
+    });
     return obj;
   });
 }
 function downloadJSON(filename, data) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json",
+  });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -289,11 +339,15 @@ function downloadJSON(filename, data) {
 }
 function toCSV(arr, headers) {
   const head = headers.join(",");
-  const body = arr.map((o) => headers.map((h) => (o[h] ?? "")).join(",")).join("\n");
+  const body = arr
+    .map((o) => headers.map((h) => (o[h] ?? "")).join(","))
+    .join("\n");
   return head + "\n" + body;
 }
 function downloadCSV(filename, data, headers) {
-  const blob = new Blob([toCSV(data, headers)], { type: "text/csv;charset=utf-8;" });
+  const blob = new Blob([toCSV(data, headers)], {
+    type: "text/csv;charset=utf-8;",
+  });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -302,12 +356,15 @@ function downloadCSV(filename, data, headers) {
   URL.revokeObjectURL(url);
 }
 
+// =================== ADMIN PANEL ===================
 function AdminPanel({ users, setUsers, products, setProducts }) {
   const [uName, setUName] = useState("");
   const [uEmail, setUEmail] = useState("");
   const [uPass, setUPass] = useState("");
+
   const [pName, setPName] = useState("");
   const [pPoints, setPPoints] = useState(10);
+
   const [seedBusy, setSeedBusy] = useState(false);
 
   const importUsersFromFile = async (file) => {
@@ -336,7 +393,11 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
     const text = await file.text();
     const arr = file.name.endsWith(".json") ? JSON.parse(text) : parseCSV(text);
     const cleaned = arr
-      .map((r) => ({ id: r.id?.trim() || uid(), name: (r.name || "").trim(), basePoints: Number(r.basePoints || r.points || 0) || 0 }))
+      .map((r) => ({
+        id: r.id?.trim() || uid(),
+        name: (r.name || "").trim(),
+        basePoints: Number(r.basePoints || r.points || 0) || 0,
+      }))
       .filter((x) => x.name);
 
     setProducts((prev) => {
@@ -349,32 +410,47 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
   };
 
   const exportUsers = () => downloadJSON("users.json", users);
-  const exportUsersCSV = () => downloadCSV("users.csv", users, ["id", "name", "email", "role", "password"]);
+  const exportUsersCSV = () =>
+    downloadCSV("users.csv", users, ["id", "name", "email", "role", "password"]);
   const exportProducts = () => downloadJSON("products.json", products);
-  const exportProductsCSV = () => downloadCSV("products.csv", products, ["id", "name", "basePoints"]);
+  const exportProductsCSV = () =>
+    downloadCSV("products.csv", products, ["id", "name", "basePoints"]);
 
   const addUser = (e) => {
     e.preventDefault();
-    const newUser = { id: uid(), name: uName.trim(), email: uEmail.trim().toLowerCase(), role: "user", password: uPass };
+    const newUser = {
+      id: uid(),
+      name: uName.trim(),
+      email: uEmail.trim().toLowerCase(),
+      role: "user",
+      password: uPass,
+    };
     if (!newUser.name || !newUser.email || !newUser.password) return;
     setUsers((prev) => {
       const next = [...prev, newUser];
       localStorage.setItem(LS_KEYS.USERS, JSON.stringify(next));
       return next;
     });
-    setUName(""); setUEmail(""); setUPass("");
+    setUName("");
+    setUEmail("");
+    setUPass("");
   };
 
   const addProduct = (e) => {
     e.preventDefault();
-    const newProduct = { id: uid(), name: pName.trim(), basePoints: Number(pPoints) || 0 };
+    const newProduct = {
+      id: uid(),
+      name: pName.trim(),
+      basePoints: Number(pPoints) || 0,
+    };
     if (!newProduct.name) return;
     setProducts((prev) => {
       const next = [...prev, newProduct];
       localStorage.setItem(LS_KEYS.PRODUCTS, JSON.stringify(next));
       return next;
     });
-    setPName(""); setPPoints(10);
+    setPName("");
+    setPPoints(10);
   };
 
   const removeUser = (id) => {
@@ -393,6 +469,7 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
     });
   };
 
+  // Načíst users/products ze serveru
   const fetchFromServer = async () => {
     setSeedBusy(true);
     try {
@@ -411,16 +488,22 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
     }
   };
 
+  // Publikovat users/products na server
   const publishToServer = async () => {
     const token = prompt("Zadej ADMIN_TOKEN (z Netlify env):");
     if (!token) return;
+
     setSeedBusy(true);
     try {
       const res = await fetch("/.netlify/functions/seed-put", {
         method: "POST",
-        headers: { "content-type": "application/json", "x-admin-token": token },
+        headers: {
+          "content-type": "application/json",
+          "x-admin-token": token,
+        },
         body: JSON.stringify({ users, products }),
       });
+
       if (!res.ok) {
         const txt = await res.text().catch(() => "");
         throw new Error(`HTTP ${res.status}\n${txt}`);
@@ -435,7 +518,6 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
 
   return (
     <div className="grid md:grid-cols-2 gap-6">
-      {/* Uživatelé */}
       <div className="bg-white rounded-2xl p-5 shadow">
         <h3 className="text-lg font-semibold mb-4">Uživatelé</h3>
         <form onSubmit={addUser} className="grid grid-cols-1 gap-3 mb-4">
@@ -467,7 +549,6 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
         </ul>
       </div>
 
-      {/* Produkty */}
       <div className="bg-white rounded-2xl p-5 shadow">
         <h3 className="text-lg font-semibold mb-4">Produkty & body</h3>
         <form onSubmit={addProduct} className="grid grid-cols-1 gap-3 mb-4">
@@ -480,8 +561,6 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
             Import (CSV/JSON):{" "}
             <input type="file" accept=".csv,.json" onChange={(e) => e.target.files[0] && importProductsFromFile(e.target.files[0])} />
           </label>
-          <button onClick={exportProducts} className="text-sm underline">Export JSON</button>
-          <button onClick={exportProductsCSV} className="text-sm underline">Export CSV</button>
         </div>
         <ul className="divide-y">
           {products.map((p) => (
@@ -508,7 +587,7 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
   );
 }
 
-/* =================== HLAVNÍ APP =================== */
+// =================== HLAVNÍ APP ===================
 export default function SalesGameApp() {
   const [session, setSession] = useState(null);
   const [me, setMe] = useState(null);
@@ -523,6 +602,7 @@ export default function SalesGameApp() {
     setMe(null);
   };
 
+  // Lokální bootstrap
   useEffect(() => {
     const uRaw = localStorage.getItem(LS_KEYS.USERS);
     const pRaw = localStorage.getItem(LS_KEYS.PRODUCTS);
@@ -539,6 +619,7 @@ export default function SalesGameApp() {
     if (sRaw) setSession(JSON.parse(sRaw));
   }, []);
 
+  // AUTO-hydratace ze serveru (users + products + entries)
   useEffect(() => {
     (async () => {
       try {
@@ -552,33 +633,37 @@ export default function SalesGameApp() {
           setProducts(srvProducts);
         }
         const srvEntries = await api.listEntries();
-        if (srvEntries.length >= 0) {
+        if (srvEntries.length || localStorage.getItem(LS_KEYS.ENTRIES) === "[]") {
           localStorage.setItem(LS_KEYS.ENTRIES, JSON.stringify(srvEntries));
           setEntries(srvEntries);
         }
-      } catch {}
+      } catch {
+        // offline ignoruj
+      }
     })();
   }, []);
 
+  // Při změně session nastavíme me
   useEffect(() => {
-    if (!session) return setMe(null);
-    setMe(users.find((x) => x.id === session.userId) || null);
+    if (!session) { setMe(null); return; }
+    const u = users.find((x) => x.id === session.userId) || null;
+    setMe(u);
   }, [session, users]);
 
+  // Uložení prodeje
   const addSale = async ({ productId, quantity, date, note, points }) => {
     if (!me) return;
     const payload = { userId: me.id, productId, quantity, date, note, points };
-
     try {
       const saved = await api.addEntry(payload);
-      const withCreated = saved.createdAt ? saved : { ...saved, createdAt: Date.now() };
       setEntries((prev) => {
-        const next = [withCreated, ...prev];
+        const next = [saved, ...prev];
         localStorage.setItem(LS_KEYS.ENTRIES, JSON.stringify(next));
         return next;
       });
       setTab("leaderboard");
     } catch (err) {
+      // fallback lokálně
       const localFallback = { id: uid(), ...payload, createdAt: Date.now() };
       setEntries((prev) => {
         const next = [localFallback, ...prev];
@@ -590,31 +675,41 @@ export default function SalesGameApp() {
     }
   };
 
+  // Smazání prodeje
   const deleteSale = async (id) => {
     if (!id) return;
-    if (!window.confirm("Opravdu chceš tento prodej smazat?")) return;
-
-    const backup = entries.slice();
-    const optimistic = backup.filter((e) => e.id !== id);
+    const prev = entries;
+    const optimistic = prev.filter(e => e.id !== id);
     setEntries(optimistic);
     localStorage.setItem(LS_KEYS.ENTRIES, JSON.stringify(optimistic));
-
     try {
-      await api.deleteEntry(id);
-
-      // pro jistotu načteme serverový stav
+      const res = await api.delEntry(id);
+      // pro jistotu stáhni čerstvý seznam (příp. jiná karta mezitím měnila)
       const fresh = await api.listEntries();
       setEntries(fresh);
       localStorage.setItem(LS_KEYS.ENTRIES, JSON.stringify(fresh));
+      if (!res.deleted && res.notFound) {
+        // nebylo co mazat – ok
+        return;
+      }
     } catch (err) {
-      setEntries(backup);
-      localStorage.setItem(LS_KEYS.ENTRIES, JSON.stringify(backup));
-      alert(`Smazání na serveru se nepovedlo. Záznam byl obnoven.\n${String(err && err.message || err)}`);
+      // revert
+      setEntries(prev);
+      localStorage.setItem(LS_KEYS.ENTRIES, JSON.stringify(prev));
+      alert(`Smazání na serveru se nepovedlo. Záznam byl obnoven.\n${String(err.message || err)}`);
     }
   };
 
   if (!me) {
-    return <Login usersFromApp={users} onLogin={(u) => { setSession({ userId: u.id }); setMe(u); }} />;
+    return (
+      <Login
+        usersFromApp={users}
+        onLogin={(u) => {
+          setSession({ userId: u.id });
+          setMe(u);
+        }}
+      />
+    );
   }
 
   return (
@@ -653,9 +748,18 @@ export default function SalesGameApp() {
         </div>
 
         <div className="space-y-6 pb-12">
-          {tab === "entry" && <SalesEntry user={me} products={products} onAddSale={addSale} />}
-          {tab === "mysales" && <MySales user={me} entries={entries} products={products} onDelete={deleteSale} />}
-          {tab === "leaderboard" && <Leaderboard users={users} entries={entries} currentUserId={me.id} />}
+          {tab === "entry" && (
+            <SalesEntry user={me} products={products} onAddSale={addSale} />
+          )}
+
+          {tab === "mysales" && (
+            <MySales user={me} entries={entries} products={products} onDelete={deleteSale} />
+          )}
+
+          {tab === "leaderboard" && (
+            <Leaderboard users={users} entries={entries} currentUserId={me.id} />
+          )}
+
           {tab === "admin" && me.role === "admin" && (
             <AdminPanel users={users} setUsers={setUsers} products={products} setProducts={setProducts} />
           )}
@@ -670,7 +774,7 @@ export default function SalesGameApp() {
   );
 }
 
-/* =================== ŽEBŘÍČEK =================== */
+// =================== ŽEBŘÍČEK ===================
 function Leaderboard({ users, entries, currentUserId }) {
   const totals = React.useMemo(() => {
     const map = new Map();
@@ -700,7 +804,9 @@ function Leaderboard({ users, entries, currentUserId }) {
                   <td className="p-2 font-semibold">{idx + 1}</td>
                   <td className="p-2">
                     {row.user.name}
-                    {isMe && <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 align-middle" />}
+                    {isMe && (
+                      <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 align-middle" />
+                    )}
                   </td>
                   <td className="p-2 font-bold">{row.points}</td>
                 </tr>
