@@ -26,13 +26,12 @@ const DEFAULT_PRODUCTS = [
 
 /**
  * Konfigurace stránky "Pravidla"
- * - imageUrl: může být cesta do /public (např. "/rules-banner.jpg") nebo libovolná veřejná URL
- *   -> pro vlastní obrázek nahraj soubor do /public a nastav sem "/nazev-souboru.jpg"
+ * - imageUrl: nepouštíme nahoře, zobrazí se až dole PO pravidlech
  */
 const RULES_CONFIG = {
   title: "Pravidla soutěže",
   period: "1. 11. – 31. 12. 2025",
-  imageUrl: "/rules-banner.jpg", // pokud nechceš obrázek, nech prázdný řetězec ""
+  imageUrl: "", // např. "/rules-banner.jpg" pokud chceš obrázek POD pravidly
   intro:
     "Cílem soutěže je v měsících listopad a prosinec nasbírat co nejvíce bodů za prodej hlavních služeb uvedených v záložce Zadat prodej.",
   rules: [
@@ -54,6 +53,21 @@ const RULES_CONFIG = {
   ],
 };
 
+/**
+ * Hlavní soutěž o zájezd – samostatná sekce v „Pravidla“
+ * Obrázek musí být v /public a jmenovat se přesně „odměna_50k.JPG“
+ */
+const MAIN_PRIZE = {
+  title: "Hlavní soutěž – zájezd za 50 000 Kč",
+  rules: [
+    "Do hlavní soutěže jsou zařazeni všichni OZ, kteří splní obecná Pravidla soutěže v části výše.",
+    "Losování hlavní ceny proběhne na lednovém setkání za přítomnosti soutěžících.",
+    "Výherce hlavní ceny musí být osobně přítomen při losování.",
+    "Hlavní cena je nepřenosná a nelze ji směnit za hotovost.",
+  ],
+  imageUrl: "/odměna_50k.JPG",
+};
+
 // ---- API helpers (serverové funkce) ----
 const api = {
   getSeed: async () => {
@@ -72,7 +86,7 @@ const api = {
   listEntries: async () => {
     try {
       const r = await fetch(
-        `/.netlify/functions/entries-list?ts=${Date.now()}`, // cache-bust
+        `/.netlify/functions/entries-list?ts=${Date.now()}`,
         { cache: "no-store", headers: { pragma: "no-cache" } }
       );
       if (!r.ok) return [];
@@ -654,7 +668,6 @@ export default function SalesGameApp() {
         }
 
         const srvEntries = await api.listEntries();
-        // nastav VŽDY – tím přepíšeme staré lokální záznamy i prázdným polem
         localStorage.setItem(LS_KEYS.ENTRIES, JSON.stringify(srvEntries));
         setEntries(srvEntries);
       } catch {
@@ -711,9 +724,7 @@ export default function SalesGameApp() {
 
     try {
       await api.delEntry(id);
-      // nic dalšího – server OK
     } catch (err) {
-      // rollback
       setEntries(previous);
       localStorage.setItem(LS_KEYS.ENTRIES, JSON.stringify(previous));
       alert(`Smazání na serveru se nepovedlo. Záznam byl obnoven.\n${String(err.message || err)}`);
@@ -755,7 +766,7 @@ export default function SalesGameApp() {
             { id: "entry", label: "Zadat prodej" },
             { id: "mysales", label: "Moje prodeje" },
             { id: "leaderboard", label: "Žebříček" },
-            { id: "rules", label: "Pravidla" },              // ← NOVÁ ZÁLOŽKA
+            { id: "rules", label: "Pravidla" },
             ...(me?.role === "admin" ? [{ id: "admin", label: "Admin" }] : []),
           ].map((t) => (
             <button
@@ -777,7 +788,7 @@ export default function SalesGameApp() {
 
           {tab === "leaderboard" && <Leaderboard users={users} entries={entries} currentUserId={me.id} />}
 
-          {tab === "rules" && <RulesPage config={RULES_CONFIG} />}   {/* ← NOVÁ STRÁNKA */}
+          {tab === "rules" && <RulesPage config={RULES_CONFIG} mainPrize={MAIN_PRIZE} />}
 
           {tab === "admin" && me.role === "admin" && (
             <AdminPanel users={users} setUsers={setUsers} products={products} setProducts={setProducts} />
@@ -822,11 +833,7 @@ function Leaderboard({ users, entries, currentUserId }) {
                 <tr key={row.user.id} className={`border-t ${isMe ? "bg-green-50" : ""}`}>
                   <td className="p-2 font-semibold">{idx + 1}</td>
                   <td className="p-2">
-                    {/* Jméno je nyní uvnitř spanu, který aplikuje font-bold, pokud isMe */}
-                    <span className={`${isMe ? 'font-bold' : ''}`}>
-                      {row.user.name}
-                    </span>
-                    {/* Původní span pro tečku byl odstraněn */}
+                    <span className={`${isMe ? 'font-bold' : ''}`}>{row.user.name}</span>
                   </td>
                   <td className="p-2 font-bold">{row.points}</td>
                 </tr>
@@ -840,51 +847,73 @@ function Leaderboard({ users, entries, currentUserId }) {
 }
 
 // =================== PRAVIDLA (NOVÁ STRÁNKA) ===================
-function RulesPage({ config }) {
+function RulesPage({ config, mainPrize }) {
   const { title, period, imageUrl, intro, rules, rewardsTitle, rewards } = config || {};
   return (
     <div className="bg-white rounded-2xl p-5 shadow">
-      <div className="flex flex-col gap-4">
-        <h2 className="text-xl font-semibold">{title || "Pravidla soutěže"}</h2>
-        {period && <p className="text-sm text-gray-500">Termín: {period}</p>}
-
-        {imageUrl ? (
-          <img
-            src={imageUrl}
-            alt="Pravidla soutěže"
-            className="w-full rounded-2xl object-cover max-h-72"
-            loading="lazy"
-          />
-        ) : null}
+      <div className="flex flex-col gap-6">
+        <div>
+          <h2 className="text-xl font-semibold">{title || "Pravidla soutěže"}</h2>
+          {period && <p className="text-sm text-gray-500">Termín: {period}</p>}
+        </div>
 
         {intro && <p className="text-gray-700">{intro}</p>}
 
-        {Array.isArray(rules) && rules.length > 0 && (
-          <div>
-            <h3 className="font-semibold mb-2">Pravidla</h3>
-            <ul className="list-disc pl-5 space-y-1">
-              {rules.map((r, i) => (
-                <li key={i} className="text-gray-700">{r}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
+        {/* 1) Nejprve ODĚMNY */}
         {Array.isArray(rewards) && rewards.length > 0 && (
-          <div>
+          <section>
             <h3 className="font-semibold mb-2">{rewardsTitle || "Odměny"}</h3>
             <ul className="list-disc pl-5 space-y-1">
               {rewards.map((r, i) => (
                 <li key={i} className="text-gray-700">{r}</li>
               ))}
             </ul>
-          </div>
+          </section>
         )}
 
-        <p className="text-xs text-gray-400 mt-4">
-          Tip: pro vlastní obrázek nahraj soubor do <code>/public</code> (např. <code>/rules-banner.jpg</code>)
-          a uprav <code>RULES_CONFIG.imageUrl</code>.
-        </p>
+        {/* 2) Poté PRAVIDLA */}
+        {Array.isArray(rules) && rules.length > 0 && (
+          <section>
+            <h3 className="font-semibold mb-2">Pravidla</h3>
+            <ul className="list-disc pl-5 space-y-1">
+              {rules.map((r, i) => (
+                <li key={i} className="text-gray-700">{r}</li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* 3) Obrázek pravidel – až pod pravidly */}
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt="Banner soutěže"
+            className="w-full rounded-2xl object-cover max-h-80"
+            loading="lazy"
+          />
+        ) : null}
+
+        {/* 4) Hlavní soutěž – vlastní blok: pravidla a pak obrázek */}
+        {mainPrize ? (
+          <section className="pt-2">
+            <h3 className="text-lg font-semibold mb-2">{mainPrize.title || "Hlavní soutěž"}</h3>
+            {Array.isArray(mainPrize.rules) && mainPrize.rules.length > 0 && (
+              <ul className="list-disc pl-5 space-y-1 mb-3">
+                {mainPrize.rules.map((r, i) => (
+                  <li key={i} className="text-gray-700">{r}</li>
+                ))}
+              </ul>
+            )}
+            {mainPrize.imageUrl ? (
+              <img
+                src={mainPrize.imageUrl}
+                alt="Hlavní cena"
+                className="w-full rounded-2xl object-cover max-h-[28rem]"
+                loading="lazy"
+              />
+            ) : null}
+          </section>
+        ) : null}
       </div>
     </div>
   );
