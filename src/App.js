@@ -36,13 +36,16 @@ const RULES_CONFIG = {
     "1. místo – Poukaz 10 000 Kč",
     "2. místo – Poukaz 5 000 Kč",
     "3. místo – Poukaz 2 000 Kč",
-    "4.–10. místo – Dárkový balíček",
+    "4. místo – Dárkový balíček",
+    "5. místo – Dárkový poukaz",
   ],
   // hlavní soutěž
   grandPrize: {
     title: "Hlavní soutěž – zájezd za 50 000 Kč",
+    intro:
+    "Každý bod se počítá :) Do hlavní soutěže se zapojí každý, kdo splní obecná pravidla. Výherce hlavní odměny budeme losovat pomoci losovacího kola, kam vložíme všechny body za listopad a prosinec.",
     bulletPoints: [
-      "Do hlavní soutěže jsou zařazeni všichni OZ, kteří splní obecná Pravidla soutěže v části výše.",
+      "Do hlavní soutěže jsou zařazeni všichni OZ, kteří splní obecná Pravidla soutěže v části níže.",
       "Losování hlavní ceny proběhne na lednovém setkání za přítomnosti soutěžících.",
       "Výherce hlavní ceny musí být osobně přítomen při losování.",
       "Hlavní cena je nepřenosná a nelze ji směnit za hotovost.",
