@@ -41,16 +41,19 @@ const api = {
       return { users: [], products: [] };
     }
   },
-  listEntries: async () => {
-    try {
-      const r = await fetch("/.netlify/functions/entries-list");
-      if (!r.ok) return [];
-      const d = await r.json().catch(() => ({}));
-      return Array.isArray(d.entries) ? d.entries : [];
-    } catch {
-      return [];
-    }
-  },
+listEntries: async () => {
+  try {
+    const r = await fetch(
+      `/.netlify/functions/entries-list?ts=${Date.now()}`, // cache-bust
+      { cache: "no-store", headers: { pragma: "no-cache" } }
+    );
+    if (!r.ok) return [];
+    const d = await r.json().catch(() => ({}));
+    return Array.isArray(d.entries) ? d.entries : [];
+  } catch {
+    return [];
+  }
+},
   addEntry: async (entry) => {
     const r = await fetch("/.netlify/functions/entries-add", {
       method: "POST",
@@ -610,29 +613,29 @@ export default function SalesGameApp() {
   }, []);
 
   // Hydratace ze serveru po mountu
-  useEffect(() => {
-    (async () => {
-      try {
-        const { users: srvUsers, products: srvProducts } = await api.getSeed();
-        if (srvUsers.length) {
-          localStorage.setItem(LS_KEYS.USERS, JSON.stringify(srvUsers));
-          setUsers(srvUsers);
-        }
-        if (srvProducts.length) {
-          localStorage.setItem(LS_KEYS.PRODUCTS, JSON.stringify(srvProducts));
-          setProducts(srvProducts);
-        }
+useEffect(() => {
+  (async () => {
+    try {
+      const { users: srvUsers, products: srvProducts } = await api.getSeed();
 
-        const srvEntries = await api.listEntries();
-        if (srvEntries.length || localStorage.getItem(LS_KEYS.ENTRIES) === "[]") {
-          localStorage.setItem(LS_KEYS.ENTRIES, JSON.stringify(srvEntries));
-          setEntries(srvEntries);
-        }
-      } catch {
-        // offline? nevadí, zůstaneme u lokálních dat
+      if (srvUsers.length) {
+        localStorage.setItem(LS_KEYS.USERS, JSON.stringify(srvUsers));
+        setUsers(srvUsers);
       }
-    })();
-  }, []);
+      if (srvProducts.length) {
+        localStorage.setItem(LS_KEYS.PRODUCTS, JSON.stringify(srvProducts));
+        setProducts(srvProducts);
+      }
+
+      const srvEntries = await api.listEntries();
+      // nastav VŽDY – tím přepíšeme staré lokální záznamy i prázdným polem
+      localStorage.setItem(LS_KEYS.ENTRIES, JSON.stringify(srvEntries));
+      setEntries(srvEntries);
+    } catch {
+      // offline? neřešíme
+    }
+  })();
+}, []);
 
   // Při změně session nastavíme me
   useEffect(() => {
