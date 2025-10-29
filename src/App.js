@@ -14,7 +14,7 @@ const uid = () =>
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
 const DEFAULT_USERS = [
-  { id: "u-admin", name: "Admin", email: "michal.horsky@dktel.cz", role: "admin", password: "myTRI2020" },
+  { id: "u-admin", name: "Admin", email: "michal.horsky@dktel.cz", role: "admin", password: "admin" },
 ];
 
 const DEFAULT_PRODUCTS = [
