@@ -1,23 +1,25 @@
-// netlify/functions/entries-list.mjs
-import { makeStore } from './_blobs.mjs';
+/* eslint-disable */
+import { getStore } from '@netlify/blobs';
 
-export default async () => {
+const STORE = 'entries';
+const KEY   = 'entries.json';
+
+function store() {
+  const siteID = process.env.BLOBS_SITE_ID || process.env.BLOBS_SITEId;
+  const token  = process.env.BLOBS_TOKEN;
+  return getStore({ name: STORE, siteID, token });
+}
+
+export const handler = async () => {
   try {
-    const store = makeStore();
-
-    // přečteme JSON z klíče entries.json (pokud neexistuje, vrátíme [])
-    let entries = await store.get('entries.json', { type: 'json' });
-    if (!Array.isArray(entries)) entries = [];
-
-    return new Response(JSON.stringify({ ok: true, entries }), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    });
+    const s = store();
+    const entries = (await s.get(KEY, { type:'json' })) || [];
+    return {
+      statusCode: 200,
+      headers: { 'cache-control': 'no-store' }, // žádný edge/browser cache
+      body: JSON.stringify({ ok:true, entries }),
+    };
   } catch (err) {
-    console.error('entries-list error:', err);
-    return new Response(
-      `err: ${err?.message || String(err)}`,
-      { status: 500, headers: { 'content-type': 'text/plain; charset=utf-8' } }
-    );
+    return { statusCode:500, body: JSON.stringify({ ok:false, error:String(err.message||err) }) };
   }
 };
