@@ -42,7 +42,7 @@ const RULES_CONFIG = {
     "OZ musí splnit svůj osobní plán v DS plnění na minimálně 80 % v průměru za listopad a prosinec.",
     "Pokud je OZ ve výpovědní lhůtě nebo podá výpověď v průběhu listopadu, prosince či ledna, soutěže se neúčastní.",
     "OZ nesmí v průběhu soutěže porušit manuál, v opačném případě bude ze soutěže vyřazen.",
-    "Pokud OZ nebude využívat tuto webovou stránku k zapisování svých prodejů, bude ze soutěže vyřazen."
+    "Pokud OZ nebude využívat tuto webovou stránku k zapisování svých prodejů, bude ze soutěže vyřazen.",
     "Při shodě bodů rozhoduje větší plnění osobního plánu v DS plnění."
   ],
   rewardsTitle: "Odměny",
