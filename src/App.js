@@ -24,16 +24,34 @@ const DEFAULT_PRODUCTS = [
   { id: "p-internet", name: "Internet", basePoints: 8 },
 ];
 
-/**
- * Konfigurace stránky "Pravidla"
- * - imageUrl: nepouštíme nahoře, zobrazí se až dole PO pravidlech
- */
+/** Nastavení obsahu záložky Pravidla a odměny */
 const RULES_CONFIG = {
   title: "Pravidla soutěže",
   period: "1. 11. – 31. 12. 2025",
-  imageUrl: "", // např. "/rules-banner.jpg" pokud chceš obrázek POD pravidly
   intro:
     "Cílem soutěže je v měsících listopad a prosinec nasbírat co nejvíce bodů za prodej hlavních služeb uvedených v záložce Zadat prodej.",
+  // nejprve výhry
+  rewardsTitle: "Odměny",
+  rewards: [
+    "1. místo – Poukaz 10 000 Kč",
+    "2. místo – Poukaz 5 000 Kč",
+    "3. místo – Poukaz 2 000 Kč",
+    "4.–10. místo – Dárkový balíček",
+  ],
+  // hlavní soutěž
+  grandPrize: {
+    title: "Hlavní soutěž – zájezd za 50 000 Kč",
+    bulletPoints: [
+      "Do hlavní soutěže jsou zařazeni všichni OZ, kteří splní obecná Pravidla soutěže v části výše.",
+      "Losování hlavní ceny proběhne na lednovém setkání za přítomnosti soutěžících.",
+      "Výherce hlavní ceny musí být osobně přítomen při losování.",
+      "Hlavní cena je nepřenosná a nelze ji směnit za hotovost.",
+    ],
+    // obrázek uložený v /public
+    image: "/odměna_50k.JPG",
+  },
+  // potom obecná pravidla
+  rulesTitle: "Pravidla",
   rules: [
     "Vyhodnocení soutěže bude vycházet z dokončených objednávek (GA). Výsledky v záložce Žebříček jsou pouze orientační.",
     "Vyhodnocení soutěže proběhne na lednovém setkání.",
@@ -42,30 +60,8 @@ const RULES_CONFIG = {
     "Pokud je OZ ve výpovědní lhůtě nebo podá výpověď v průběhu listopadu, prosince či ledna, soutěže se neúčastní.",
     "OZ nesmí v průběhu soutěže porušit manuál, v opačném případě bude ze soutěže vyřazen.",
     "Pokud OZ nebude využívat tuto webovou stránku k zapisování svých prodejů, bude ze soutěže vyřazen.",
-    "Při shodě bodů rozhoduje větší plnění osobního plánu v DS plnění."
+    "Při shodě bodů rozhoduje větší plnění osobního plánu v DS plnění.",
   ],
-  rewardsTitle: "Odměny",
-  rewards: [
-    "1. místo – Poukaz 10 000 Kč",
-    "2. místo – Poukaz 5 000 Kč",
-    "3. místo – Poukaz 2 000 Kč",
-    "4.–10. místo – Dárkový balíček",
-  ],
-};
-
-/**
- * Hlavní soutěž o zájezd – samostatná sekce v „Pravidla“
- * Obrázek musí být v /public a jmenovat se přesně „odměna_50k.JPG“
- */
-const MAIN_PRIZE = {
-  title: "Hlavní soutěž – zájezd za 50 000 Kč",
-  rules: [
-    "Do hlavní soutěže jsou zařazeni všichni OZ, kteří splní obecná Pravidla soutěže v části výše.",
-    "Losování hlavní ceny proběhne na lednovém setkání za přítomnosti soutěžících.",
-    "Výherce hlavní ceny musí být osobně přítomen při losování.",
-    "Hlavní cena je nepřenosná a nelze ji směnit za hotovost.",
-  ],
-  imageUrl: "/odměna_50k.JPG",
 };
 
 // ---- API helpers (serverové funkce) ----
@@ -671,7 +667,7 @@ export default function SalesGameApp() {
         localStorage.setItem(LS_KEYS.ENTRIES, JSON.stringify(srvEntries));
         setEntries(srvEntries);
       } catch {
-        // offline? neřešíme
+        // ignore
       }
     })();
   }, []);
@@ -766,7 +762,7 @@ export default function SalesGameApp() {
             { id: "entry", label: "Zadat prodej" },
             { id: "mysales", label: "Moje prodeje" },
             { id: "leaderboard", label: "Žebříček" },
-            { id: "rules", label: "Pravidla" },
+            { id: "rules", label: "Pravidla a odměny" }, // přejmenovaná záložka
             ...(me?.role === "admin" ? [{ id: "admin", label: "Admin" }] : []),
           ].map((t) => (
             <button
@@ -788,7 +784,7 @@ export default function SalesGameApp() {
 
           {tab === "leaderboard" && <Leaderboard users={users} entries={entries} currentUserId={me.id} />}
 
-          {tab === "rules" && <RulesPage config={RULES_CONFIG} mainPrize={MAIN_PRIZE} />}
+          {tab === "rules" && <RulesPage config={RULES_CONFIG} />}
 
           {tab === "admin" && me.role === "admin" && (
             <AdminPanel users={users} setUsers={setUsers} products={products} setProducts={setProducts} />
@@ -846,23 +842,29 @@ function Leaderboard({ users, entries, currentUserId }) {
   );
 }
 
-// =================== PRAVIDLA (NOVÁ STRÁNKA) ===================
-function RulesPage({ config, mainPrize }) {
-  const { title, period, imageUrl, intro, rules, rewardsTitle, rewards } = config || {};
+// =================== PRAVIDLA & ODMĚNY (NOVÁ STRÁNKA) ===================
+function RulesPage({ config }) {
+  const {
+    title, period, intro,
+    rewardsTitle, rewards,
+    rulesTitle, rules,
+    grandPrize,
+  } = config || {};
+
   return (
     <div className="bg-white rounded-2xl p-5 shadow">
       <div className="flex flex-col gap-6">
         <div>
           <h2 className="text-xl font-semibold">{title || "Pravidla soutěže"}</h2>
-          {period && <p className="text-sm text-gray-500">Termín: {period}</p>}
+          {period && <p className="text-sm text-gray-500 mt-1">Termín: {period}</p>}
         </div>
 
         {intro && <p className="text-gray-700">{intro}</p>}
 
-        {/* 1) Nejprve ODĚMNY */}
+        {/* Odměny jako první sekce */}
         {Array.isArray(rewards) && rewards.length > 0 && (
           <section>
-            <h3 className="font-semibold mb-2">{rewardsTitle || "Odměny"}</h3>
+            <h3 className="text-lg font-semibold mb-2">{rewardsTitle || "Odměny"}</h3>
             <ul className="list-disc pl-5 space-y-1">
               {rewards.map((r, i) => (
                 <li key={i} className="text-gray-700">{r}</li>
@@ -871,10 +873,34 @@ function RulesPage({ config, mainPrize }) {
           </section>
         )}
 
-        {/* 2) Poté PRAVIDLA */}
+        {/* Hlavní soutěž se zvětšeným nadpisem a obrázkem beze střihu */}
+        {grandPrize && (
+          <section>
+            <h3 className="text-2xl md:text-3xl font-bold mb-3">{grandPrize.title}</h3>
+            {Array.isArray(grandPrize.bulletPoints) && (
+              <ul className="list-disc pl-5 space-y-1 mb-3">
+                {grandPrize.bulletPoints.map((bp, i) => (
+                  <li key={i} className="text-gray-700">{bp}</li>
+                ))}
+              </ul>
+            )}
+            {grandPrize.image && (
+              <div className="w-full bg-gray-50 border rounded-2xl p-2">
+                <img
+                  src={grandPrize.image}
+                  alt="Hlavní cena – zájezd"
+                  className="w-full h-auto object-contain max-h-[640px] mx-auto rounded-xl"
+                  loading="lazy"
+                />
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Obecná pravidla až za odměnami a hlavní soutěží */}
         {Array.isArray(rules) && rules.length > 0 && (
           <section>
-            <h3 className="font-semibold mb-2">Pravidla</h3>
+            <h3 className="text-lg font-semibold mb-2">{rulesTitle || "Pravidla"}</h3>
             <ul className="list-disc pl-5 space-y-1">
               {rules.map((r, i) => (
                 <li key={i} className="text-gray-700">{r}</li>
@@ -882,38 +908,6 @@ function RulesPage({ config, mainPrize }) {
             </ul>
           </section>
         )}
-
-        {/* 3) Obrázek pravidel – až pod pravidly */}
-        {imageUrl ? (
-          <img
-            src={imageUrl}
-            alt="Banner soutěže"
-            className="w-full rounded-2xl object-cover max-h-80"
-            loading="lazy"
-          />
-        ) : null}
-
-        {/* 4) Hlavní soutěž – vlastní blok: pravidla a pak obrázek */}
-        {mainPrize ? (
-          <section className="pt-2">
-            <h3 className="text-lg font-semibold mb-2">{mainPrize.title || "Hlavní soutěž"}</h3>
-            {Array.isArray(mainPrize.rules) && mainPrize.rules.length > 0 && (
-              <ul className="list-disc pl-5 space-y-1 mb-3">
-                {mainPrize.rules.map((r, i) => (
-                  <li key={i} className="text-gray-700">{r}</li>
-                ))}
-              </ul>
-            )}
-            {mainPrize.imageUrl ? (
-              <img
-                src={mainPrize.imageUrl}
-                alt="Hlavní cena"
-                className="w-full rounded-2xl object-cover max-h-[28rem]"
-                loading="lazy"
-              />
-            ) : null}
-          </section>
-        ) : null}
       </div>
     </div>
   );
