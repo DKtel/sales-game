@@ -1,49 +1,45 @@
-// netlify/functions/entries-add.mjs
-import { makeStore } from './_blobs.mjs';
+/* eslint-disable */
+import { getStore } from '@netlify/blobs';
 
-export default async (request) => {
-  if (request.method !== 'POST') {
-    return new Response('Method Not Allowed', { status: 405 });
+const STORE = 'entries';
+const KEY = 'entries.json';
+
+function store() {
+  const siteID = process.env.BLOBS_SITE_ID || process.env.BLOBS_SITEId;
+  const token  = process.env.BLOBS_TOKEN;
+  return getStore({ name: STORE, siteID, token });
+}
+
+export const handler = async (event) => {
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, body: JSON.stringify({ ok:false, error:'Method Not Allowed' }) };
   }
 
   try {
-    const store = makeStore();
+    const { entry } = JSON.parse(event.body || '{}');
+    if (!entry) return { statusCode:400, body: JSON.stringify({ ok:false, error:'Missing entry' }) };
 
-    const body = await request.json().catch(() => ({}));
-    const entry = body?.entry;
+    const s = store();
+    const current = (await s.get(KEY, { type:'json' })) || [];
 
-    if (!entry || !entry.userId || !entry.productId || !entry.points) {
-      return new Response('Bad Request: missing fields', { status: 400 });
-    }
-
-    // načti dosavadní pole záznamů
-    let entries = await store.get('entries.json', { type: 'json' });
-    if (!Array.isArray(entries)) entries = [];
-
-    // doplň interní id a čas, pokud nepřišlo
-    const now = Date.now();
-    const withMeta = {
-      id: entry.id || `e_${now}_${Math.random().toString(36).slice(2)}`,
-      createdAt: entry.createdAt || now,
+    const saved = {
+      id: entry.id || `e_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      createdAt: Date.now(),
       ...entry,
     };
+    current.unshift(saved);
 
-    entries.unshift(withMeta); // přidáme na začátek
-
-    // zapiš zpět – bezpečně jako JSON
-    await store.set('entries.json', JSON.stringify(entries), {
+    await s.set(KEY, JSON.stringify(current), {
       contentType: 'application/json',
+      addRandomSuffix: false,     // ← DŮLEŽITÉ: stejný soubor, žádné suffixy
     });
 
-    return new Response(JSON.stringify({ ok: true, saved: withMeta }), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    });
+    return {
+      statusCode: 200,
+      headers: { 'cache-control': 'no-store' },
+      body: JSON.stringify({ ok:true, entry:saved }),
+    };
   } catch (err) {
-    console.error('entries-add error:', err);
-    return new Response(
-      `err: ${err?.message || String(err)}`,
-      { status: 500, headers: { 'content-type': 'text/plain; charset=utf-8' } }
-    );
+    return { statusCode:500, body: JSON.stringify({ ok:false, error:String(err.message||err) }) };
   }
 };
