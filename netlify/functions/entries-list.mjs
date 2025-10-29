@@ -23,3 +23,4 @@ export const handler = async () => {
     return { statusCode:500, body: JSON.stringify({ ok:false, error:String(err.message||err) }) };
   }
 };
+
