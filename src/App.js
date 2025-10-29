@@ -24,6 +24,32 @@ const DEFAULT_PRODUCTS = [
   { id: "p-internet", name: "Internet", basePoints: 8 },
 ];
 
+/**
+ * Konfigurace stránky "Pravidla"
+ * - imageUrl: může být cesta do /public (např. "/rules-banner.jpg") nebo libovolná veřejná URL
+ *   -> pro vlastní obrázek nahraj soubor do /public a nastav sem "/nazev-souboru.jpg"
+ */
+const RULES_CONFIG = {
+  title: "Pravidla soutěže",
+  period: "1. 11. – 31. 12. 2025",
+  imageUrl: "/rules-banner.jpg", // pokud nechceš obrázek, nech prázdný řetězec ""
+  intro:
+    "Cílem je nasbírat co nejvíce bodů za aktivní prodeje. Body se sčítají napříč produkty. Při shodě bodů rozhoduje dřívější dosažení.",
+  rules: [
+    "Bodové hodnoty za produkty: viz karta **Produkty & body**.",
+    "Prodej musí být zadán do 24 hodin od uskutečnění.",
+    "Záznamy musí obsahovat pravdivé údaje (kontrolní vzorek proběhne průběžně).",
+    "Na konci soutěže proběhne kontrola duplicit a neplatné záznamy se odečítají.",
+  ],
+  rewardsTitle: "Odměny",
+  rewards: [
+    "1. místo – Poukaz 10 000 Kč",
+    "2. místo – Poukaz 5 000 Kč",
+    "3. místo – Poukaz 2 000 Kč",
+    "4.–10. místo – Dárkový balíček",
+  ],
+};
+
 // ---- API helpers (serverové funkce) ----
 const api = {
   getSeed: async () => {
@@ -39,19 +65,19 @@ const api = {
       return { users: [], products: [] };
     }
   },
-listEntries: async () => {
-  try {
-    const r = await fetch(
-      `/.netlify/functions/entries-list?ts=${Date.now()}`, // cache-bust
-      { cache: "no-store", headers: { pragma: "no-cache" } }
-    );
-    if (!r.ok) return [];
-    const d = await r.json().catch(() => ({}));
-    return Array.isArray(d.entries) ? d.entries : [];
-  } catch {
-    return [];
-  }
-},
+  listEntries: async () => {
+    try {
+      const r = await fetch(
+        `/.netlify/functions/entries-list?ts=${Date.now()}`, // cache-bust
+        { cache: "no-store", headers: { pragma: "no-cache" } }
+      );
+      if (!r.ok) return [];
+      const d = await r.json().catch(() => ({}));
+      return Array.isArray(d.entries) ? d.entries : [];
+    } catch {
+      return [];
+    }
+  },
   addEntry: async (entry) => {
     const r = await fetch("/.netlify/functions/entries-add", {
       method: "POST",
@@ -152,9 +178,7 @@ function Login({ onLogin, usersFromApp = [] }) {
             Přihlásit se
           </button>
         </form>
-        <p className="text-xs text-gray-400 mt-4">
-         
-        </p>
+        <p className="text-xs text-gray-400 mt-4"></p>
       </div>
     </div>
   );
@@ -611,29 +635,29 @@ export default function SalesGameApp() {
   }, []);
 
   // Hydratace ze serveru po mountu
-useEffect(() => {
-  (async () => {
-    try {
-      const { users: srvUsers, products: srvProducts } = await api.getSeed();
+  useEffect(() => {
+    (async () => {
+      try {
+        const { users: srvUsers, products: srvProducts } = await api.getSeed();
 
-      if (srvUsers.length) {
-        localStorage.setItem(LS_KEYS.USERS, JSON.stringify(srvUsers));
-        setUsers(srvUsers);
-      }
-      if (srvProducts.length) {
-        localStorage.setItem(LS_KEYS.PRODUCTS, JSON.stringify(srvProducts));
-        setProducts(srvProducts);
-      }
+        if (srvUsers.length) {
+          localStorage.setItem(LS_KEYS.USERS, JSON.stringify(srvUsers));
+          setUsers(srvUsers);
+        }
+        if (srvProducts.length) {
+          localStorage.setItem(LS_KEYS.PRODUCTS, JSON.stringify(srvProducts));
+          setProducts(srvProducts);
+        }
 
-      const srvEntries = await api.listEntries();
-      // nastav VŽDY – tím přepíšeme staré lokální záznamy i prázdným polem
-      localStorage.setItem(LS_KEYS.ENTRIES, JSON.stringify(srvEntries));
-      setEntries(srvEntries);
-    } catch {
-      // offline? neřešíme
-    }
-  })();
-}, []);
+        const srvEntries = await api.listEntries();
+        // nastav VŽDY – tím přepíšeme staré lokální záznamy i prázdným polem
+        localStorage.setItem(LS_KEYS.ENTRIES, JSON.stringify(srvEntries));
+        setEntries(srvEntries);
+      } catch {
+        // offline? neřešíme
+      }
+    })();
+  }, []);
 
   // Při změně session nastavíme me
   useEffect(() => {
@@ -727,6 +751,7 @@ useEffect(() => {
             { id: "entry", label: "Zadat prodej" },
             { id: "mysales", label: "Moje prodeje" },
             { id: "leaderboard", label: "Žebříček" },
+            { id: "rules", label: "Pravidla" },              // ← NOVÁ ZÁLOŽKA
             ...(me?.role === "admin" ? [{ id: "admin", label: "Admin" }] : []),
           ].map((t) => (
             <button
@@ -747,6 +772,8 @@ useEffect(() => {
           )}
 
           {tab === "leaderboard" && <Leaderboard users={users} entries={entries} currentUserId={me.id} />}
+
+          {tab === "rules" && <RulesPage config={RULES_CONFIG} />}   {/* ← NOVÁ STRÁNKA */}
 
           {tab === "admin" && me.role === "admin" && (
             <AdminPanel users={users} setUsers={setUsers} products={products} setProducts={setProducts} />
@@ -788,14 +815,14 @@ function Leaderboard({ users, entries, currentUserId }) {
             {totals.map((row, idx) => {
               const isMe = row.user.id === currentUserId;
               return (
-                // Zvýraznění řádku pomocí bg-green-50 zůstává
                 <tr key={row.user.id} className={`border-t ${isMe ? "bg-green-50" : ""}`}>
                   <td className="p-2 font-semibold">{idx + 1}</td>
                   <td className="p-2">
-                    {row.user.name}
-                    {/* TATO ČÁST BYLA ODSTRANĚNA: 
-                    {isMe && <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 align-middle" />}
-                    */}
+                    {/* Jméno je nyní uvnitř spanu, který aplikuje font-bold, pokud isMe */}
+                    <span className={`${isMe ? 'font-bold' : ''}`}>
+                      {row.user.name}
+                    </span>
+                    {/* Původní span pro tečku byl odstraněn */}
                   </td>
                   <td className="p-2 font-bold">{row.points}</td>
                 </tr>
@@ -803,6 +830,57 @@ function Leaderboard({ users, entries, currentUserId }) {
             })}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+// =================== PRAVIDLA (NOVÁ STRÁNKA) ===================
+function RulesPage({ config }) {
+  const { title, period, imageUrl, intro, rules, rewardsTitle, rewards } = config || {};
+  return (
+    <div className="bg-white rounded-2xl p-5 shadow">
+      <div className="flex flex-col gap-4">
+        <h2 className="text-xl font-semibold">{title || "Pravidla soutěže"}</h2>
+        {period && <p className="text-sm text-gray-500">Termín: {period}</p>}
+
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt="Pravidla soutěže"
+            className="w-full rounded-2xl object-cover max-h-72"
+            loading="lazy"
+          />
+        ) : null}
+
+        {intro && <p className="text-gray-700">{intro}</p>}
+
+        {Array.isArray(rules) && rules.length > 0 && (
+          <div>
+            <h3 className="font-semibold mb-2">Pravidla</h3>
+            <ul className="list-disc pl-5 space-y-1">
+              {rules.map((r, i) => (
+                <li key={i} className="text-gray-700">{r}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {Array.isArray(rewards) && rewards.length > 0 && (
+          <div>
+            <h3 className="font-semibold mb-2">{rewardsTitle || "Odměny"}</h3>
+            <ul className="list-disc pl-5 space-y-1">
+              {rewards.map((r, i) => (
+                <li key={i} className="text-gray-700">{r}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <p className="text-xs text-gray-400 mt-4">
+          Tip: pro vlastní obrázek nahraj soubor do <code>/public</code> (např. <code>/rules-banner.jpg</code>)
+          a uprav <code>RULES_CONFIG.imageUrl</code>.
+        </p>
       </div>
     </div>
   );
