@@ -42,8 +42,6 @@ const RULES_CONFIG = {
   // hlavní soutěž
   grandPrize: {
     title: "Hlavní soutěž – zájezd za 50 000 Kč",
-    intro:
-    "Každý bod se počítá :) Do hlavní soutěže se zapojí každý, kdo splní obecná pravidla. Výherce hlavní odměny budeme losovat pomoci losovacího kola, kam vložíme všechny body za listopad a prosinec.",
     bulletPoints: [
       "Do hlavní soutěže jsou zařazeni všichni OZ, kteří splní obecná Pravidla soutěže v části níže.",
       "Losování hlavní ceny proběhne na lednovém setkání za přítomnosti soutěžících.",
