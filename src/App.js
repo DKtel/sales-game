@@ -1,7 +1,7 @@
 /* eslint-disable */
 import React, { useEffect, useMemo, useState } from "react";
 
-// =================== KONSTANTY & POMOCNÉ FUNKCE ===================
+/* =================== KONSTANTY & POMOCNÉ FUNKCE =================== */
 const LS_KEYS = {
   USERS: "sales_game_users_v1",
   ENTRIES: "sales_game_entries_v1",
@@ -14,7 +14,13 @@ const uid = () =>
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
 const DEFAULT_USERS = [
-  { id: "u-admin", name: "Admin", email: "michal.horsky@dktel.cz", role: "admin", password: "myTRI2020" },
+  {
+    id: "u-admin",
+    name: "Admin",
+    email: "michal.horsky@dktel.cz",
+    role: "admin",
+    password: "myTRI2020",
+  },
 ];
 
 const DEFAULT_PRODUCTS = [
@@ -39,20 +45,21 @@ const RULES_CONFIG = {
     "4. místo – Dárkový balíček",
     "5. místo – Dárkový poukaz",
   ],
-  // hlavní soutěž
+  // hlavní soutěž (vlastní sekce)
   grandPrize: {
     title: "Hlavní soutěž – zájezd za 50 000 Kč",
+    // <- přesně tento text se zobrazí hned pod nadpisem hlavní soutěže
+    intro:
+      "Cílem soutěže je v měsících listopad a prosinec nasbírat co nejvíce bodů za prodej hlavních služeb uvedených v záložce Zadat prodej.",
     bulletPoints: [
       "Do hlavní soutěže jsou zařazeni všichni OZ, kteří splní obecná Pravidla soutěže v části níže.",
       "Losování hlavní ceny proběhne na lednovém setkání za přítomnosti soutěžících.",
       "Výherce hlavní ceny musí být osobně přítomen při losování.",
       "Hlavní cena je nepřenosná a nelze ji směnit za hotovost.",
     ],
-    // obrázek uložený v /public
-    image: "/odměna_50k.JPG",
+    imageUrl: "/odměna_50k.JPG",
   },
-  // potom obecná pravidla
-  rulesTitle: "Pravidla",
+  // obecná pravidla (jdou až za hlavní soutěž)
   rules: [
     "Vyhodnocení soutěže bude vycházet z dokončených objednávek (GA). Výsledky v záložce Žebříček jsou pouze orientační.",
     "Vyhodnocení soutěže proběhne na lednovém setkání.",
@@ -65,7 +72,7 @@ const RULES_CONFIG = {
   ],
 };
 
-// ---- API helpers (serverové funkce) ----
+/* ------------------- API helpers (serverové funkce) ------------------- */
 const api = {
   getSeed: async () => {
     try {
@@ -115,7 +122,7 @@ const api = {
   },
 };
 
-// =================== LOGIN ===================
+/* =================== LOGIN =================== */
 function Login({ onLogin, usersFromApp = [] }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -131,7 +138,6 @@ function Login({ onLogin, usersFromApp = [] }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // 1) preferuj seznam z App state
     let users =
       usersFromApp.length
         ? usersFromApp
@@ -139,7 +145,6 @@ function Login({ onLogin, usersFromApp = [] }) {
 
     let u = findMatch(users);
 
-    // 2) fallback: stáhni čerstvé uživatele ze serveru
     if (!u) {
       try {
         const { users: srvUsers } = await api.getSeed();
@@ -156,14 +161,16 @@ function Login({ onLogin, usersFromApp = [] }) {
     }
 
     localStorage.setItem(LS_KEYS.SESSION, JSON.stringify({ userId: u.id }));
-    onLogin(u); // bez refresh
+    onLogin(u);
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
       <div className="w-full max-w-md bg-white shadow-xl rounded-2xl p-6">
         <h1 className="text-2xl font-bold mb-2">Vstup do soutěže</h1>
-        <p className="text-gray-500 mb-6">Přihlaste se svým firemním e-mailem.</p>
+        <p className="text-gray-500 mb-6">
+          Přihlaste se svým firemním e-mailem.
+        </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1">E-mail</label>
@@ -193,13 +200,12 @@ function Login({ onLogin, usersFromApp = [] }) {
             Přihlásit se
           </button>
         </form>
-        <p className="text-xs text-gray-400 mt-4"></p>
       </div>
     </div>
   );
 }
 
-// =================== ZADÁNÍ PRODEJE ===================
+/* =================== ZADÁNÍ PRODEJE =================== */
 function SalesEntry({ user, products, onAddSale }) {
   const [productId, setProductId] = useState(products[0]?.id || "");
   const [quantity, setQuantity] = useState(1);
@@ -294,7 +300,7 @@ function SalesEntry({ user, products, onAddSale }) {
   );
 }
 
-// =================== MOJE PRODEJE ===================
+/* =================== MOJE PRODEJE =================== */
 function MySales({ user, entries, products, onDeleteSale }) {
   const my = entries
     .filter((e) => e.userId === user.id)
@@ -320,7 +326,9 @@ function MySales({ user, entries, products, onDeleteSale }) {
             {my.map((e) => (
               <tr key={e.id} className="border-t">
                 <td className="p-2">{e.date}</td>
-                <td className="p-2">{productMap[e.productId]?.name || e.productId}</td>
+                <td className="p-2">
+                  {productMap[e.productId]?.name || e.productId}
+                </td>
                 <td className="p-2">{e.quantity}</td>
                 <td className="p-2">{e.note}</td>
                 <td className="p-2 font-semibold">{e.points}</td>
@@ -348,19 +356,23 @@ function MySales({ user, entries, products, onDeleteSale }) {
   );
 }
 
-// =================== IMPORT/EXPORT UTILITY ===================
+/* =================== IMPORT/EXPORT UTILITY =================== */
 function parseCSV(text) {
   const lines = text.trim().split(/\r?\n/);
   const headers = lines.shift().split(",").map((h) => h.trim());
   return lines.map((line) => {
     const cols = line.split(",");
     const obj = {};
-    headers.forEach((h, i) => { obj[h] = (cols[i] || "").trim(); });
+    headers.forEach((h, i) => {
+      obj[h] = (cols[i] || "").trim();
+    });
     return obj;
   });
 }
 function downloadJSON(filename, data) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json",
+  });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -370,11 +382,15 @@ function downloadJSON(filename, data) {
 }
 function toCSV(arr, headers) {
   const head = headers.join(",");
-  const body = arr.map((o) => headers.map((h) => (o[h] ?? "")).join(",")).join("\n");
+  const body = arr
+    .map((o) => headers.map((h) => (o[h] ?? "")).join(","))
+    .join("\n");
   return head + "\n" + body;
 }
 function downloadCSV(filename, data, headers) {
-  const blob = new Blob([toCSV(data, headers)], { type: "text/csv;charset=utf-8;" });
+  const blob = new Blob([toCSV(data, headers)], {
+    type: "text/csv;charset=utf-8;",
+  });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -383,7 +399,7 @@ function downloadCSV(filename, data, headers) {
   URL.revokeObjectURL(url);
 }
 
-// =================== ADMIN PANEL ===================
+/* =================== ADMIN PANEL =================== */
 function AdminPanel({ users, setUsers, products, setProducts }) {
   const [uName, setUName] = useState("");
   const [uEmail, setUEmail] = useState("");
@@ -465,7 +481,11 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
 
   const addProduct = (e) => {
     e.preventDefault();
-    const newProduct = { id: uid(), name: pName.trim(), basePoints: Number(pPoints) || 0 };
+    const newProduct = {
+      id: uid(),
+      name: pName.trim(),
+      basePoints: Number(pPoints) || 0,
+    };
     if (!newProduct.name) return;
     setProducts((prev) => {
       const next = [...prev, newProduct];
@@ -492,7 +512,6 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
     });
   };
 
-  // Načíst users/products ze serveru
   const fetchFromServer = async () => {
     setSeedBusy(true);
     try {
@@ -505,7 +524,9 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
         setProducts(srvProducts);
       }
 
-      alert(`Načteno ze serveru ✅\nUživatelé: ${srvUsers.length}\nProdukty: ${srvProducts.length}`);
+      alert(
+        `Načteno ze serveru ✅\nUživatelé: ${srvUsers.length}\nProdukty: ${srvProducts.length}`
+      );
     } catch (err) {
       alert(`Chyba při načítání ze serveru ❌\n${String(err.message || err)}`);
     } finally {
@@ -513,7 +534,6 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
     }
   };
 
-  // Publikovat users/products na server (využívá seed-put)
   const publishToServer = async () => {
     const token = prompt("Zadej ADMIN_TOKEN (z Netlify env):");
     if (!token) return;
@@ -548,28 +568,62 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
       <div className="bg-white rounded-2xl p-5 shadow">
         <h3 className="text-lg font-semibold mb-4">Uživatelé</h3>
         <form onSubmit={addUser} className="grid grid-cols-1 gap-3 mb-4">
-          <input className="border rounded-xl px-3 py-2" placeholder="Jméno a příjmení" value={uName} onChange={(e) => setUName(e.target.value)} />
-          <input className="border rounded-xl px-3 py-2" placeholder="E-mail" value={uEmail} onChange={(e) => setUEmail(e.target.value)} />
-          <input className="border rounded-xl px-3 py-2" placeholder="Dočasné heslo" value={uPass} onChange={(e) => setUPass(e.target.value)} />
-          <button className="bg-black text-white rounded-xl px-4 py-2 w-full md:w-auto">Přidat uživatele</button>
+          <input
+            className="border rounded-xl px-3 py-2"
+            placeholder="Jméno a příjmení"
+            value={uName}
+            onChange={(e) => setUName(e.target.value)}
+          />
+          <input
+            className="border rounded-xl px-3 py-2"
+            placeholder="E-mail"
+            value={uEmail}
+            onChange={(e) => setUEmail(e.target.value)}
+          />
+          <input
+            className="border rounded-xl px-3 py-2"
+            placeholder="Dočasné heslo"
+            value={uPass}
+            onChange={(e) => setUPass(e.target.value)}
+          />
+          <button className="bg-black text-white rounded-xl px-4 py-2 w-full md:w-auto">
+            Přidat uživatele
+          </button>
         </form>
         <div className="flex flex-wrap gap-2 mb-3">
           <label className="text-sm">
             Import (CSV/JSON):{" "}
-            <input type="file" accept=".csv,.json" onChange={(e) => e.target.files[0] && importUsersFromFile(e.target.files[0])} />
+            <input
+              type="file"
+              accept=".csv,.json"
+              onChange={(e) =>
+                e.target.files[0] && importUsersFromFile(e.target.files[0])
+              }
+            />
           </label>
-          <button onClick={exportUsers} className="text-sm underline">Export JSON</button>
-          <button onClick={exportUsersCSV} className="text-sm underline">Export CSV</button>
+          <button onClick={exportUsers} className="text-sm underline">
+            Export JSON
+          </button>
+          <button onClick={exportUsersCSV} className="text-sm underline">
+            Export CSV
+          </button>
         </div>
         <ul className="divide-y">
           {users.map((u) => (
             <li key={u.id} className="py-2 flex items-center justify-between">
               <div>
                 <p className="font-medium">{u.name}</p>
-                <p className="text-xs text-gray-500">{u.email} • role: {u.role}</p>
+                <p className="text-xs text-gray-500">
+                  {u.email} • role: {u.role}
+                </p>
               </div>
               {u.role !== "admin" && (
-                <button onClick={() => removeUser(u.id)} className="text-red-600 text-sm hover:underline">Smazat</button>
+                <button
+                  onClick={() => removeUser(u.id)}
+                  className="text-red-600 text-sm hover:underline"
+                >
+                  Smazat
+                </button>
               )}
             </li>
           ))}
@@ -580,17 +634,41 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
       <div className="bg-white rounded-2xl p-5 shadow">
         <h3 className="text-lg font-semibold mb-4">Produkty & body</h3>
         <form onSubmit={addProduct} className="grid grid-cols-1 gap-3 mb-4">
-          <input className="border rounded-xl px-3 py-2" placeholder="Název produktu" value={pName} onChange={(e) => setPName(e.target.value)} />
-          <input type="number" className="border rounded-xl px-3 py-2" placeholder="Body za kus" value={pPoints} onChange={(e) => setPPoints(e.target.value)} />
-          <button className="bg-black text-white rounded-xl px-4 py-2 w-full md:w-auto">Přidat produkt</button>
+          <input
+            className="border rounded-xl px-3 py-2"
+            placeholder="Název produktu"
+            value={pName}
+            onChange={(e) => setPName(e.target.value)}
+          />
+          <input
+            type="number"
+            className="border rounded-xl px-3 py-2"
+            placeholder="Body za kus"
+            value={pPoints}
+            onChange={(e) => setPPoints(e.target.value)}
+          />
+          <button className="bg-black text-white rounded-xl px-4 py-2 w-full md:w-auto">
+            Přidat produkt
+          </button>
         </form>
         <div className="flex flex-wrap gap-2 mb-3">
           <label className="text-sm">
             Import (CSV/JSON):{" "}
-            <input type="file" accept=".csv,.json" onChange={(e) => e.target.files[0] && importProductsFromFile(e.target.files[0])} />
+            <input
+              type="file"
+              accept=".csv,.json"
+              onChange={(e) =>
+                e.target.files[0] &&
+                importProductsFromFile(e.target.files[0])
+              }
+            />
           </label>
-          <button onClick={exportProducts} className="text-sm underline">Export JSON</button>
-          <button onClick={exportProductsCSV} className="text-sm underline">Export CSV</button>
+          <button onClick={exportProducts} className="text-sm underline">
+            Export JSON
+          </button>
+          <button onClick={exportProductsCSV} className="text-sm underline">
+            Export CSV
+          </button>
         </div>
         <ul className="divide-y">
           {products.map((p) => (
@@ -599,17 +677,30 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
                 <p className="font-medium">{p.name}</p>
                 <p className="text-xs text-gray-500">{p.basePoints} bodů / ks</p>
               </div>
-              <button onClick={() => removeProduct(p.id)} className="text-red-600 text-sm hover:underline">Smazat</button>
+              <button
+                onClick={() => removeProduct(p.id)}
+                className="text-red-600 text-sm hover:underline"
+              >
+                Smazat
+              </button>
             </li>
           ))}
         </ul>
       </div>
 
       <div className="md:col-span-2 flex flex-wrap gap-3 justify-end">
-        <button onClick={fetchFromServer} disabled={seedBusy} className="text-sm border rounded-xl px-4 py-2 disabled:opacity-60">
+        <button
+          onClick={fetchFromServer}
+          disabled={seedBusy}
+          className="text-sm border rounded-xl px-4 py-2 disabled:opacity-60"
+        >
           {seedBusy ? "Načítám…" : "Načíst ze serveru"}
         </button>
-        <button onClick={publishToServer} disabled={seedBusy} className="text-sm bg-black text-white rounded-xl px-4 py-2 disabled:opacity-60">
+        <button
+          onClick={publishToServer}
+          disabled={seedBusy}
+          className="text-sm bg-black text-white rounded-xl px-4 py-2 disabled:opacity-60"
+        >
           {seedBusy ? "Publikuji…" : "Publikovat uživatele & produkty na server"}
         </button>
       </div>
@@ -617,7 +708,7 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
   );
 }
 
-// =================== HLAVNÍ APP ===================
+/* =================== HLAVNÍ APP =================== */
 export default function SalesGameApp() {
   const [session, setSession] = useState(null);
   const [me, setMe] = useState(null);
@@ -638,7 +729,8 @@ export default function SalesGameApp() {
     const pRaw = localStorage.getItem(LS_KEYS.PRODUCTS);
     const eRaw = localStorage.getItem(LS_KEYS.ENTRIES);
     if (!uRaw) localStorage.setItem(LS_KEYS.USERS, JSON.stringify(DEFAULT_USERS));
-    if (!pRaw) localStorage.setItem(LS_KEYS.PRODUCTS, JSON.stringify(DEFAULT_PRODUCTS));
+    if (!pRaw)
+      localStorage.setItem(LS_KEYS.PRODUCTS, JSON.stringify(DEFAULT_PRODUCTS));
     if (!eRaw) localStorage.setItem(LS_KEYS.ENTRIES, JSON.stringify([]));
 
     setUsers(JSON.parse(localStorage.getItem(LS_KEYS.USERS) || "[]"));
@@ -668,7 +760,7 @@ export default function SalesGameApp() {
         localStorage.setItem(LS_KEYS.ENTRIES, JSON.stringify(srvEntries));
         setEntries(srvEntries);
       } catch {
-        // ignore
+        // offline
       }
     })();
   }, []);
@@ -709,7 +801,7 @@ export default function SalesGameApp() {
     }
   };
 
-  // Smazání prodeje (optimisticky, s rollbackem)
+  // Smazání prodeje
   const deleteSale = async (id) => {
     const sure = window.confirm("Opravdu smazat tento záznam?");
     if (!sure) return;
@@ -724,7 +816,11 @@ export default function SalesGameApp() {
     } catch (err) {
       setEntries(previous);
       localStorage.setItem(LS_KEYS.ENTRIES, JSON.stringify(previous));
-      alert(`Smazání na serveru se nepovedlo. Záznam byl obnoven.\n${String(err.message || err)}`);
+      alert(
+        `Smazání na serveru se nepovedlo. Záznam byl obnoven.\n${String(
+          err.message || err
+        )}`
+      );
     }
   };
 
@@ -746,12 +842,21 @@ export default function SalesGameApp() {
       <header className="bg-white sticky top-0 z-10 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-12 h-8 rounded-xl bg-black text-white flex items-center justify-center font-bold">DKtel</div>
+            <div className="w-12 h-8 rounded-xl bg-black text-white flex items-center justify-center font-bold">
+              DKtel
+            </div>
             <h1 className="font-bold">Vánoční soutěž</h1>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-600">{me?.name} ({me?.role})</span>
-            <button onClick={handleLogout} className="text-sm text-gray-500 hover:underline">Odhlásit</button>
+            <span className="text-sm text-gray-600">
+              {me?.name} ({me?.role})
+            </span>
+            <button
+              onClick={handleLogout}
+              className="text-sm text-gray-500 hover:underline"
+            >
+              Odhlásit
+            </button>
           </div>
         </div>
       </header>
@@ -763,13 +868,15 @@ export default function SalesGameApp() {
             { id: "entry", label: "Zadat prodej" },
             { id: "mysales", label: "Moje prodeje" },
             { id: "leaderboard", label: "Žebříček" },
-            { id: "rules", label: "Pravidla a odměny" }, // přejmenovaná záložka
+            { id: "rules", label: "Pravidla a odměny" }, // <— název záložky
             ...(me?.role === "admin" ? [{ id: "admin", label: "Admin" }] : []),
           ].map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`px-4 py-2 rounded-xl text-sm font-medium border ${tab === t.id ? "bg-black text-white" : "bg-white hover:bg-gray-50"}`}
+              className={`px-4 py-2 rounded-xl text-sm font-medium border ${
+                tab === t.id ? "bg-black text-white" : "bg-white hover:bg-gray-50"
+              }`}
             >
               {t.label}
             </button>
@@ -777,18 +884,36 @@ export default function SalesGameApp() {
         </div>
 
         <div className="space-y-6 pb-12">
-          {tab === "entry" && <SalesEntry user={me} products={products} onAddSale={addSale} />}
-
-          {tab === "mysales" && (
-            <MySales user={me} entries={entries} products={products} onDeleteSale={deleteSale} />
+          {tab === "entry" && (
+            <SalesEntry user={me} products={products} onAddSale={addSale} />
           )}
 
-          {tab === "leaderboard" && <Leaderboard users={users} entries={entries} currentUserId={me.id} />}
+          {tab === "mysales" && (
+            <MySales
+              user={me}
+              entries={entries}
+              products={products}
+              onDeleteSale={deleteSale}
+            />
+          )}
+
+          {tab === "leaderboard" && (
+            <Leaderboard
+              users={users}
+              entries={entries}
+              currentUserId={me.id}
+            />
+          )}
 
           {tab === "rules" && <RulesPage config={RULES_CONFIG} />}
 
           {tab === "admin" && me.role === "admin" && (
-            <AdminPanel users={users} setUsers={setUsers} products={products} setProducts={setProducts} />
+            <AdminPanel
+              users={users}
+              setUsers={setUsers}
+              products={products}
+              setProducts={setProducts}
+            />
           )}
         </div>
       </div>
@@ -801,7 +926,7 @@ export default function SalesGameApp() {
   );
 }
 
-// =================== ŽEBŘÍČEK ===================
+/* =================== ŽEBŘÍČEK =================== */
 function Leaderboard({ users, entries, currentUserId }) {
   const totals = React.useMemo(() => {
     const map = new Map();
@@ -830,7 +955,7 @@ function Leaderboard({ users, entries, currentUserId }) {
                 <tr key={row.user.id} className={`border-t ${isMe ? "bg-green-50" : ""}`}>
                   <td className="p-2 font-semibold">{idx + 1}</td>
                   <td className="p-2">
-                    <span className={`${isMe ? 'font-bold' : ''}`}>{row.user.name}</span>
+                    <span className={isMe ? "font-bold" : ""}>{row.user.name}</span>
                   </td>
                   <td className="p-2 font-bold">{row.points}</td>
                 </tr>
@@ -843,73 +968,90 @@ function Leaderboard({ users, entries, currentUserId }) {
   );
 }
 
-// =================== PRAVIDLA & ODMĚNY (NOVÁ STRÁNKA) ===================
+/* =================== PRAVIDLA & ODMĚNY (NOVÁ STRÁNKA) =================== */
 function RulesPage({ config }) {
   const {
-    title, period, intro,
-    rewardsTitle, rewards,
-    rulesTitle, rules,
+    title,
+    period,
+    intro,
+    rewardsTitle,
+    rewards,
     grandPrize,
+    rules,
   } = config || {};
 
   return (
     <div className="bg-white rounded-2xl p-5 shadow">
-      <div className="flex flex-col gap-6">
-        <div>
-          <h2 className="text-xl font-semibold">{title || "Pravidla soutěže"}</h2>
-          {period && <p className="text-sm text-gray-500 mt-1">Termín: {period}</p>}
-        </div>
+      {/* HLAVIČKA + úvod */}
+      <h2 className="text-xl font-semibold">{title || "Pravidla soutěže"}</h2>
+      {period && <p className="text-sm text-gray-500 mt-1">Termín: {period}</p>}
+      {intro && <p className="text-gray-700 mt-4">{intro}</p>}
 
-        {intro && <p className="text-gray-700">{intro}</p>}
+      {/* ODMĚNY */}
+      {Array.isArray(rewards) && rewards.length > 0 && (
+        <section className="mt-8">
+          <h3 className="font-semibold mb-2">{rewardsTitle || "Odměny"}</h3>
+          <ul className="list-disc pl-5 space-y-1">
+            {rewards.map((r, i) => (
+              <li key={i} className="text-gray-700">
+                {r}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
-        {/* Odměny jako první sekce */}
-        {Array.isArray(rewards) && rewards.length > 0 && (
-          <section>
-            <h3 className="text-lg font-semibold mb-2">{rewardsTitle || "Odměny"}</h3>
-            <ul className="list-disc pl-5 space-y-1">
-              {rewards.map((r, i) => (
-                <li key={i} className="text-gray-700">{r}</li>
-              ))}
-            </ul>
-          </section>
-        )}
+      {/* HLAVNÍ SOUTĚŽ */}
+      {grandPrize && (
+        <section className="mt-10">
+          <h3 className="font-extrabold tracking-tight text-[clamp(28px,4.2vw,40px)]">
+            {grandPrize.title || "Hlavní soutěž"}
+          </h3>
 
-        {/* Hlavní soutěž se zvětšeným nadpisem a obrázkem beze střihu */}
-        {grandPrize && (
-          <section>
-            <h3 className="text-2xl md:text-3xl font-bold mb-3">{grandPrize.title}</h3>
-            {Array.isArray(grandPrize.bulletPoints) && (
-              <ul className="list-disc pl-5 space-y-1 mb-3">
-                {grandPrize.bulletPoints.map((bp, i) => (
-                  <li key={i} className="text-gray-700">{bp}</li>
+          {/* Úvodní věta hned pod nadpisem hlavní soutěže */}
+          {(grandPrize.intro || intro) && (
+            <p className="text-gray-700 mt-3">
+              {grandPrize.intro || intro}
+            </p>
+          )}
+
+          {Array.isArray(grandPrize.bulletPoints) &&
+            grandPrize.bulletPoints.length > 0 && (
+              <ul className="list-disc pl-5 space-y-1 mt-3">
+                {grandPrize.bulletPoints.map((b, i) => (
+                  <li key={i} className="text-gray-700">
+                    {b}
+                  </li>
                 ))}
               </ul>
             )}
-            {grandPrize.image && (
-              <div className="w-full bg-gray-50 border rounded-2xl p-2">
-                <img
-                  src={grandPrize.image}
-                  alt="Hlavní cena – zájezd"
-                  className="w-full h-auto object-contain max-h-[640px] mx-auto rounded-xl"
-                  loading="lazy"
-                />
-              </div>
-            )}
-          </section>
-        )}
 
-        {/* Obecná pravidla až za odměnami a hlavní soutěží */}
-        {Array.isArray(rules) && rules.length > 0 && (
-          <section>
-            <h3 className="text-lg font-semibold mb-2">{rulesTitle || "Pravidla"}</h3>
-            <ul className="list-disc pl-5 space-y-1">
-              {rules.map((r, i) => (
-                <li key={i} className="text-gray-700">{r}</li>
-              ))}
-            </ul>
-          </section>
-        )}
-      </div>
+          {grandPrize.imageUrl && (
+            <div className="mt-4 rounded-2xl bg-gray-50 border">
+              <img
+                src={grandPrize.imageUrl}
+                alt="Hlavní výhra"
+                className="w-full max-h-[520px] object-contain rounded-2xl"
+                loading="lazy"
+              />
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* PRAVIDLA (až za hlavní soutěží) */}
+      {Array.isArray(rules) && rules.length > 0 && (
+        <section className="mt-10">
+          <h3 className="font-semibold mb-2">Pravidla</h3>
+          <ul className="list-disc pl-5 space-y-1">
+            {rules.map((r, i) => (
+              <li key={i} className="text-gray-700">
+                {r}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }
