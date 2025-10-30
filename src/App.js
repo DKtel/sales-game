@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 
 /* =================== KONSTANTY & POMOCNÉ FUNKCE =================== */
 const LS_KEYS = {
-  USERS: "sales_game_users_v1hla
+  USERS: "sales_game_users_v1",
   ENTRIES: "sales_game_entries_v1",
   PRODUCTS: "sales_game_products_v1",
   SESSION: "sales_game_session_v1",
@@ -1005,7 +1005,7 @@ function RulesPage({ config }) {
       {/* HLAVNÍ SOUTĚŽ */}
       {grandPrize && (
         <section className="mt-10">
-          <h3 className="font-extrabold tracking-tight text-[clamp(28px,3.2vw,40px)]">
+          <h3 className="font-extrabold tracking-tight text-[clamp(28px,4.2vw,40px)]">
             {grandPrize.title || "Hlavní soutěž"}
           </h3>
 
