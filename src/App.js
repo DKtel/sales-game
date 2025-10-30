@@ -1005,7 +1005,7 @@ function RulesPage({ config }) {
       {/* HLAVNÍ SOUTĚŽ */}
       {grandPrize && (
         <section className="mt-10">
-          <h3 className="font-extrabold tracking-tight text-[clamp(28px,4.2vw,40px)]">
+          <h3 className="font-extrabold tracking-tight text-[clamp(22px,2.5vw,32px)]">
             {grandPrize.title || "Hlavní soutěž"}
           </h3>
 
