@@ -32,7 +32,7 @@ const DEFAULT_PRODUCTS = [
 
 /** Nastavení obsahu záložky Pravidla a odměny */
 const RULES_CONFIG = {
-  title: "Pravidla soutěže",
+  title: "Pravidla soutěže a odměny",
   period: "1. 11. – 31. 12. 2025",
   intro:
     "Cílem soutěže je v měsících listopad a prosinec nasbírat co nejvíce bodů za prodej hlavních služeb uvedených v záložce Zadat prodej.",
