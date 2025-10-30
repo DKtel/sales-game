@@ -88,7 +88,7 @@ const api = {
   listEntries: async () => {
     try {
       const r = await fetch(
-        `/.netlify/functions/entries-list?ts=${Date.now()}`,
+        `/.netlify/functions/entries-list?ts=${ Date.now() }`,
         { cache: "no-store", headers: { pragma: "no-cache" } }
       );
       if (!r.ok) return [];
@@ -988,7 +988,10 @@ function RulesPage({ config }) {
       {/* ODMĚNY */}
       {Array.isArray(rewards) && rewards.length > 0 && (
         <section className="mt-8">
-          <h3 className="font-semibold mb-2">{rewardsTitle || "Odměny"}</h3>
+          {/* >>> ZVÝRAZNĚNÝ NADPIS ODMĚN (cca polovina „Hlavní soutěž“) <<< */}
+          <h3 className="mb-2 font-extrabold leading-tight text-[clamp(16px,2.1vw,20px)]">
+            {rewardsTitle || "Odměny"}
+          </h3>
           <ul className="list-disc pl-5 space-y-1">
             {rewards.map((r, i) => (
               <li key={i} className="text-gray-700">
