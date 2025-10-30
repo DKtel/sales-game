@@ -35,7 +35,7 @@ const RULES_CONFIG = {
   title: "Pravidla soutěže a odměny",
   period: "1. 11. – 31. 12. 2025",
   intro:
-    "Cílem soutěže je v měsících listopad a prosinec nasbírat co nejvíce bodů za prodej hlavních služeb uvedených v záložce Zadat prodej.",
+    "Cílem soutěže je v měsících listopad a prosinec nasbírat co nejvíce bodů za prodej hlavních služeb uvedených v záložce Zadat prodej. Soutěže máme dvě - první je o 5 cen a vyhraje 5 nejlepších obchodníků z celé ČR. Druhá, Hlavní soutěž o zájezd za 50 000 Kč je pro všechny, kteří splní podmínky soutěže. ",
   // nejprve výhry
   rewardsTitle: "Odměny",
   rewards: [
@@ -50,12 +50,9 @@ const RULES_CONFIG = {
     title: "Hlavní soutěž – zájezd za 50 000 Kč",
     // <- přesně tento text se zobrazí hned pod nadpisem hlavní soutěže
     intro:
-      "Cílem soutěže je v měsících listopad a prosinec nasbírat co nejvíce bodů za prodej hlavních služeb uvedených v záložce Zadat prodej.",
+      "Všechny body, které posbíráte za listopad a prosinec se sečtou a na lednovém setkání pomocí online losovacícho kola vylosujeme hlavního výherce.",
     bulletPoints: [
       "Do hlavní soutěže jsou zařazeni všichni OZ, kteří splní obecná Pravidla soutěže v části níže.",
-      "Losování hlavní ceny proběhne na lednovém setkání za přítomnosti soutěžících.",
-      "Výherce hlavní ceny musí být osobně přítomen při losování.",
-      "Hlavní cena je nepřenosná a nelze ji směnit za hotovost.",
     ],
     imageUrl: "/odměna_50k.JPG",
   },
