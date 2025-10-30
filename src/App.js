@@ -398,7 +398,8 @@ function downloadCSV(filename, data, headers) {
 }
 
 /* =================== ADMIN PANEL =================== */
-function AdminPanel({ users, setUsers, products, setProducts }) {
+// !!! Přidán parametr `entries` kvůli exportu žebříčku do Excelu
+function AdminPanel({ users, setUsers, products, setProducts, entries }) {
   const [uName, setUName] = useState("");
   const [uEmail, setUEmail] = useState("");
   const [uPass, setUPass] = useState("");
@@ -407,6 +408,40 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
   const [pPoints, setPPoints] = useState(10);
 
   const [seedBusy, setSeedBusy] = useState(false);
+
+  // --- výpočet žebříčku (stejné pravidlo jako ve view) ---
+  const buildLeaderboard = () => {
+    const map = new Map();
+    for (const e of entries || []) map.set(e.userId, (map.get(e.userId) || 0) + e.points);
+    const arr = users.map((u) => ({ user: u, points: map.get(u.id) || 0 }));
+    arr.sort((a, b) => b.points - a.points || a.user.name.localeCompare(b.user.name));
+    return arr;
+  };
+
+  // --- EXPORT ŽEBŘÍČKU DO EXCELU (.xlsx) ---
+  const exportLeaderboardXLSX = async () => {
+    const rows = buildLeaderboard();
+
+    // dynamický import SheetJS (bez instalace)
+    const XLSX = await import(
+      "https://cdn.sheetjs.com/xlsx-0.20.0/package/xlsx.mjs"
+    );
+
+    const aoa = [
+      ["Žebříček – Vánoční soutěž"],
+      ["Vygenerováno:", new Date().toLocaleString("cs-CZ")],
+      [],
+      ["#", "Obchodník", "Body"],
+    ];
+    rows.forEach((r, i) => aoa.push([i + 1, r.user.name, r.points]));
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = [{ wch: 4 }, { wch: 32 }, { wch: 10 }];
+
+    XLSX.utils.book_append_sheet(wb, ws, "Žebříček");
+    XLSX.writeFile(wb, `zebricek-${todayISO()}.xlsx`);
+  };
 
   const importUsersFromFile = async (file) => {
     const text = await file.text();
@@ -686,6 +721,7 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
         </ul>
       </div>
 
+      {/* Spodní ovládací lišta + EXPORT DO EXCELU */}
       <div className="md:col-span-2 flex flex-wrap gap-3 justify-end">
         <button
           onClick={fetchFromServer}
@@ -700,6 +736,15 @@ function AdminPanel({ users, setUsers, products, setProducts }) {
           className="text-sm bg-black text-white rounded-xl px-4 py-2 disabled:opacity-60"
         >
           {seedBusy ? "Publikuji…" : "Publikovat uživatele & produkty na server"}
+        </button>
+
+        {/* NOVÉ TLAČÍTKO */}
+        <button
+          onClick={exportLeaderboardXLSX}
+          className="text-sm border rounded-xl px-4 py-2"
+          title="Exportuje aktuální žebříček do Excelu (.xlsx)"
+        >
+          Export žebříček (Excel)
         </button>
       </div>
     </div>
@@ -911,6 +956,7 @@ export default function SalesGameApp() {
               setUsers={setUsers}
               products={products}
               setProducts={setProducts}
+              entries={entries} // <<— důležité pro export Excelu
             />
           )}
         </div>
@@ -987,7 +1033,7 @@ function RulesPage({ config }) {
       {/* ODMĚNY */}
       {Array.isArray(rewards) && rewards.length > 0 && (
         <section className="mt-8">
-          {/* >>> ZVÝRAZNĚNÝ NADPIS ODMĚN (cca polovina „Hlavní soutěž“) <<< */}
+          {/* zvýrazněný nadpis Odměn (cca polovina „Hlavní soutěž“) */}
           <h3 className="mb-2 font-extrabold leading-tight text-[clamp(16px,2.1vw,20px)]">
             {rewardsTitle || "Odměny"}
           </h3>
@@ -1004,11 +1050,10 @@ function RulesPage({ config }) {
       {/* HLAVNÍ SOUTĚŽ */}
       {grandPrize && (
         <section className="mt-10">
-            <h3 className="font-extrabold tracking-tight text-[clamp(20px,2.2vw,28px)]">
+          <h3 className="font-extrabold tracking-tight text-[clamp(20px,2.2vw,28px)]">
             {grandPrize.title || "Hlavní soutěž"}
           </h3>
 
-          {/* Úvodní věta hned pod nadpisem hlavní soutěže */}
           {(grandPrize.intro || intro) && (
             <p className="text-gray-700 mt-3">
               {grandPrize.intro || intro}
