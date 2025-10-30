@@ -88,7 +88,7 @@ const api = {
   listEntries: async () => {
     try {
       const r = await fetch(
-        `/.netlify/functions/entries-list?ts=${ Date.now() }`,
+        `/.netlify/functions/entries-list?ts=${Date.now()}`,
         { cache: "no-store", headers: { pragma: "no-cache" } }
       );
       if (!r.ok) return [];
@@ -397,8 +397,23 @@ function downloadCSV(filename, data, headers) {
   URL.revokeObjectURL(url);
 }
 
+/* =================== XLSX LOADER (pro export Excelu) =================== */
+// Načte UMD verzi SheetJS v prohlížeči (žádný ESM import => build OK na Netlify)
+async function ensureXLSX() {
+  if (typeof window !== "undefined" && window.XLSX) return window.XLSX;
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src =
+      "https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js";
+    s.async = true;
+    s.onload = () => resolve(window.XLSX);
+    s.onerror = () =>
+      reject(new Error("Nelze načíst knihovnu XLSX (SheetJS)."));
+    document.head.appendChild(s);
+  });
+}
+
 /* =================== ADMIN PANEL =================== */
-// !!! Přidán parametr `entries` kvůli exportu žebříčku do Excelu
 function AdminPanel({ users, setUsers, products, setProducts, entries }) {
   const [uName, setUName] = useState("");
   const [uEmail, setUEmail] = useState("");
@@ -408,40 +423,6 @@ function AdminPanel({ users, setUsers, products, setProducts, entries }) {
   const [pPoints, setPPoints] = useState(10);
 
   const [seedBusy, setSeedBusy] = useState(false);
-
-  // --- výpočet žebříčku (stejné pravidlo jako ve view) ---
-  const buildLeaderboard = () => {
-    const map = new Map();
-    for (const e of entries || []) map.set(e.userId, (map.get(e.userId) || 0) + e.points);
-    const arr = users.map((u) => ({ user: u, points: map.get(u.id) || 0 }));
-    arr.sort((a, b) => b.points - a.points || a.user.name.localeCompare(b.user.name));
-    return arr;
-  };
-
-  // --- EXPORT ŽEBŘÍČKU DO EXCELU (.xlsx) ---
-  const exportLeaderboardXLSX = async () => {
-    const rows = buildLeaderboard();
-
-    // dynamický import SheetJS (bez instalace)
-    const XLSX = await import(
-      "https://cdn.sheetjs.com/xlsx-0.20.0/package/xlsx.mjs"
-    );
-
-    const aoa = [
-      ["Žebříček – Vánoční soutěž"],
-      ["Vygenerováno:", new Date().toLocaleString("cs-CZ")],
-      [],
-      ["#", "Obchodník", "Body"],
-    ];
-    rows.forEach((r, i) => aoa.push([i + 1, r.user.name, r.points]));
-
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws["!cols"] = [{ wch: 4 }, { wch: 32 }, { wch: 10 }];
-
-    XLSX.utils.book_append_sheet(wb, ws, "Žebříček");
-    XLSX.writeFile(wb, `zebricek-${todayISO()}.xlsx`);
-  };
 
   const importUsersFromFile = async (file) => {
     const text = await file.text();
@@ -595,6 +576,44 @@ function AdminPanel({ users, setUsers, products, setProducts, entries }) {
     }
   };
 
+  // --- EXPORT ŽEBŘÍČKU DO EXCELU (.xlsx) ---
+  const exportLeaderboardXLSX = async () => {
+    try {
+      const XLSX = await ensureXLSX();
+
+      // poskládej žebříček stejně jako ve view
+      const map = new Map();
+      for (const e of entries || [])
+        map.set(e.userId, (map.get(e.userId) || 0) + e.points);
+
+      const rows = users
+        .map((u) => ({ name: u.name, points: map.get(u.id) || 0 }))
+        .sort(
+          (a, b) => b.points - a.points || a.name.localeCompare(b.name)
+        );
+
+      const aoa = [
+        ["Žebříček – Vánoční soutěž"],
+        ["Vygenerováno:", new Date().toLocaleString("cs-CZ")],
+        [],
+        ["#", "Obchodník", "Body"],
+      ];
+      rows.forEach((r, i) => aoa.push([i + 1, r.name, r.points]));
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws["!cols"] = [{ wch: 4 }, { wch: 32 }, { wch: 10 }];
+
+      XLSX.utils.book_append_sheet(wb, ws, "Žebříček");
+      XLSX.writeFile(
+        wb,
+        `zebricek-${new Date().toISOString().slice(0, 10)}.xlsx`
+      );
+    } catch (err) {
+      alert(`Export selhal: ${String(err.message || err)}`);
+    }
+  };
+
   return (
     <div className="grid md:grid-cols-2 gap-6">
       {/* Uživatelé */}
@@ -607,6 +626,8 @@ function AdminPanel({ users, setUsers, products, setProducts, entries }) {
             value={uName}
             onChange={(e) => setUName(e.target.value)}
           />
+        </form>
+        <form onSubmit={addUser} className="grid grid-cols-1 gap-3 mb-4">
           <input
             className="border rounded-xl px-3 py-2"
             placeholder="E-mail"
@@ -721,7 +742,6 @@ function AdminPanel({ users, setUsers, products, setProducts, entries }) {
         </ul>
       </div>
 
-      {/* Spodní ovládací lišta + EXPORT DO EXCELU */}
       <div className="md:col-span-2 flex flex-wrap gap-3 justify-end">
         <button
           onClick={fetchFromServer}
@@ -738,11 +758,11 @@ function AdminPanel({ users, setUsers, products, setProducts, entries }) {
           {seedBusy ? "Publikuji…" : "Publikovat uživatele & produkty na server"}
         </button>
 
-        {/* NOVÉ TLAČÍTKO */}
+        {/* Nové tlačítko: Export žebříčku do Excelu */}
         <button
           onClick={exportLeaderboardXLSX}
-          className="text-sm border rounded-xl px-4 py-2"
-          title="Exportuje aktuální žebříček do Excelu (.xlsx)"
+          className="text-sm bg-emerald-600 text-white rounded-xl px-4 py-2"
+          title="Exportuje aktuální žebříček (sečtené body) do .xlsx"
         >
           Export žebříček (Excel)
         </button>
@@ -956,15 +976,14 @@ export default function SalesGameApp() {
               setUsers={setUsers}
               products={products}
               setProducts={setProducts}
-              entries={entries} // <<— důležité pro export Excelu
+              entries={entries}                 // <— předáme záznamy do Admin panelu
             />
           )}
         </div>
       </div>
 
       {/* Footer */}
-      <footer className="text-center text-xs text-gray-400 py-6">
-      </footer>
+      <footer className="text-center text-xs text-gray-400 py-6"></footer>
     </div>
   );
 }
@@ -1033,7 +1052,7 @@ function RulesPage({ config }) {
       {/* ODMĚNY */}
       {Array.isArray(rewards) && rewards.length > 0 && (
         <section className="mt-8">
-          {/* zvýrazněný nadpis Odměn (cca polovina „Hlavní soutěž“) */}
+          {/* zvýrazněný nadpis odměn */}
           <h3 className="mb-2 font-extrabold leading-tight text-[clamp(16px,2.1vw,20px)]">
             {rewardsTitle || "Odměny"}
           </h3>
@@ -1055,9 +1074,7 @@ function RulesPage({ config }) {
           </h3>
 
           {(grandPrize.intro || intro) && (
-            <p className="text-gray-700 mt-3">
-              {grandPrize.intro || intro}
-            </p>
+            <p className="text-gray-700 mt-3">{grandPrize.intro || intro}</p>
           )}
 
           {Array.isArray(grandPrize.bulletPoints) &&
