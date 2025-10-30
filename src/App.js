@@ -918,7 +918,6 @@ export default function SalesGameApp() {
 
       {/* Footer */}
       <footer className="text-center text-xs text-gray-400 py-6">
-        Prototyp • serverová data: Netlify Functions + Blobs
       </footer>
     </div>
   );
