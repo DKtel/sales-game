@@ -1114,6 +1114,11 @@ function RulesPage({ config }) {
           </ul>
         </section>
       )}
+
+       {/* MALÉ PRÁVNÍ UPOZORNĚNÍ – mimo odrážky, menší písmo */}
+      <p className="mt-6 text-sm text-gray-500">
+        DKtel si vyhrazuje právo na změnu pravidel soutěže.
+      </p>
     </div>
   );
 }
