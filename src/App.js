@@ -43,7 +43,7 @@ const RULES_CONFIG = {
     "2. místo – Alza poukaz v hodnotě 5 000 Kč",
     "3. místo – Tankovací karta v hodnotě 3 000 Kč",
     "4. místo – Poukaz do Infinit wellness centra pro dvě osoby ",
-    "5. místo – Dárkový poukaz",
+    "5. místo – Překvapení:) ",
   ],
   // hlavní soutěž (vlastní sekce)
   grandPrize: {
