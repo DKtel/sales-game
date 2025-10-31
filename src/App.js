@@ -39,10 +39,10 @@ const RULES_CONFIG = {
   // nejprve výhry
   rewardsTitle: "Odměny pro 5 nejlepší obchodníků",
   rewards: [
-    "1. místo – Poukaz 10 000 Kč",
-    "2. místo – Poukaz 5 000 Kč",
-    "3. místo – Poukaz 2 000 Kč",
-    "4. místo – Dárkový balíček",
+    "1. místo – Amazing poukaz v hodnotě 10 000 Kč",
+    "2. místo – Alza poukaz v hodnotě 5 000 Kč",
+    "3. místo – Tankovací karta v hodnotě 3 000 Kč",
+    "4. místo – Poukaz do Infinit wellness centra pro dvě osoby ",
     "5. místo – Dárkový poukaz",
   ],
   // hlavní soutěž (vlastní sekce)
