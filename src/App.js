@@ -50,7 +50,7 @@ const RULES_CONFIG = {
     title: "Hlavní soutěž – zájezd za 50 000 Kč",
     // <- přesně tento text se zobrazí hned pod nadpisem hlavní soutěže
     intro:
-      "Všechny body, které posbíráte za listopad a prosinec se sečtou a na lednovém setkání pomocí online losovacícho kola vylosujeme hlavního výherce.",
+      "Všechny body, které posbíráte za listopad a prosinec se sečtou a na lednovém setkání pomocí online losovacího kola vylosujeme hlavního výherce.",
     bulletPoints: [
       "Do Hlavní soutěže jsou zařazeni všichni OZ, kteří splní obecná Pravidla soutěže v části níže.",
       "Do Hlavní soutěže se zapojují i OZ, kteří vyhráli první soutěž, můžou tedy získat dvě výhry .",
